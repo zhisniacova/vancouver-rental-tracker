@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type ListingStatus = "new" | "messaged" | "viewing_scheduled" | "viewed" | "expired";
@@ -51,9 +52,10 @@ const initialFormData: ListingFormData = {
 };
 
 const fieldClassName =
-  "w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-400";
+  "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-400";
 
 export default function ListingForm() {
+  const router = useRouter();
   const [formData, setFormData] = useState<ListingFormData>(initialFormData);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -104,9 +106,8 @@ export default function ListingForm() {
       return;
     }
 
-    setMessage("Listing saved successfully!");
-    setFormData(initialFormData);
-    setIsSaving(false);
+    router.push("/");
+    router.refresh();
   }
 
   return (
@@ -130,12 +131,7 @@ export default function ListingForm() {
 
         <div>
           <label className="mb-2 block text-sm font-medium text-slate-700">Added by</label>
-          <select
-            name="addedBy"
-            value={formData.addedBy}
-            onChange={handleChange}
-            className={fieldClassName}
-          >
+          <select name="addedBy" value={formData.addedBy} onChange={handleChange} className={fieldClassName}>
             <option>Sasha</option>
             <option>Gleb</option>
           </select>
@@ -180,12 +176,7 @@ export default function ListingForm() {
 
         <div>
           <label className="mb-2 block text-sm font-medium text-slate-700">Neighborhood</label>
-          <select
-            name="neighborhood"
-            value={formData.neighborhood}
-            onChange={handleChange}
-            className={fieldClassName}
-          >
+          <select name="neighborhood" value={formData.neighborhood} onChange={handleChange} className={fieldClassName}>
             <option>Kitsilano</option>
             <option>Yaletown</option>
             <option>Olympic Village</option>
@@ -196,12 +187,7 @@ export default function ListingForm() {
 
         <div>
           <label className="mb-2 block text-sm font-medium text-slate-700">Type</label>
-          <select
-            name="type"
-            value={formData.type}
-            onChange={handleChange}
-            className={fieldClassName}
-          >
+          <select name="type" value={formData.type} onChange={handleChange} className={fieldClassName}>
             <option>Studio</option>
             <option>1 Bed</option>
             <option>1 Bed + Den</option>
@@ -213,21 +199,14 @@ export default function ListingForm() {
 
         <div>
           <label className="mb-2 block text-sm font-medium text-slate-700">Furnished</label>
-          <select
-            name="furnished"
-            value={formData.furnished}
-            onChange={handleChange}
-            className={fieldClassName}
-          >
+          <select name="furnished" value={formData.furnished} onChange={handleChange} className={fieldClassName}>
             <option>Yes</option>
             <option>No</option>
           </select>
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Earliest move-in date
-          </label>
+          <label className="mb-2 block text-sm font-medium text-slate-700">Earliest move-in date</label>
           <input
             name="earliestMoveIn"
             type="date"
@@ -287,12 +266,7 @@ export default function ListingForm() {
 
         <div>
           <label className="mb-2 block text-sm font-medium text-slate-700">Status</label>
-          <select
-            name="status"
-            value={formData.status}
-            onChange={handleChange}
-            className={fieldClassName}
-          >
+          <select name="status" value={formData.status} onChange={handleChange} className={fieldClassName}>
             <option value="new">new</option>
             <option value="messaged">messaged</option>
             <option value="viewing_scheduled">viewing_scheduled</option>
@@ -303,12 +277,7 @@ export default function ListingForm() {
 
         <div>
           <label className="mb-2 block text-sm font-medium text-slate-700">Messaged by</label>
-          <select
-            name="messagedBy"
-            value={formData.messagedBy}
-            onChange={handleChange}
-            className={fieldClassName}
-          >
+          <select name="messagedBy" value={formData.messagedBy} onChange={handleChange} className={fieldClassName}>
             <option>None</option>
             <option>Sasha</option>
             <option>Gleb</option>
@@ -351,9 +320,7 @@ export default function ListingForm() {
         </div>
 
         <div className="md:col-span-2">
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            General comments
-          </label>
+          <label className="mb-2 block text-sm font-medium text-slate-700">General comments</label>
           <textarea
             name="comments"
             rows={4}
