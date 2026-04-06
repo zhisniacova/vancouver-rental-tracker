@@ -1,5 +1,6 @@
 import FilterBar from "@/components/FilterBar";
 import ListingCard, { Listing } from "@/components/ListingCard";
+import Link from "next/link";
 
 const sampleListings: Listing[] = [
   {
@@ -58,9 +59,12 @@ export default function Home() {
             </h1>
           </div>
 
-          <button className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700">
+          <Link
+            href="/add-listing"
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          >
             + Add listing
-          </button>
+          </Link>
         </header>
 
         <FilterBar />
