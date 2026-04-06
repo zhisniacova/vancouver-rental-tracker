@@ -26,6 +26,8 @@ type Props = {
 
 export default function ListingCard({ listing }: Props) {
   const router = useRouter();
+  const bothLiked =
+    listing.likes.includes("Sasha") && listing.likes.includes("Gleb");
 
   async function handleDelete() {
     const confirmDelete = window.confirm("Delete this listing?");
@@ -74,8 +76,17 @@ export default function ListingCard({ listing }: Props) {
   }
 
   return (
-    <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-      <div className="flex h-48 items-center justify-center bg-slate-200 text-sm text-slate-500">
+    <article
+      className={`overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ${
+        bothLiked ? "ring-emerald-300" : "ring-slate-200"
+      }`}
+    >
+      <div className="relative flex h-48 items-center justify-center bg-slate-200 text-sm text-slate-500">
+        {bothLiked && (
+          <div className="absolute left-3 top-3 rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-white shadow-sm">
+            Both liked
+          </div>
+        )}
         Listing photo
       </div>
 
