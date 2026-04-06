@@ -24,6 +24,14 @@ type Props = {
   listing: Listing;
 };
 
+const STATUS_OPTIONS: Listing["status"][] = [
+  "new",
+  "messaged",
+  "viewing_scheduled",
+  "viewed",
+  "expired",
+];
+
 export default function ListingCard({ listing }: Props) {
   const router = useRouter();
   const bothLiked =
@@ -75,6 +83,23 @@ export default function ListingCard({ listing }: Props) {
     router.refresh();
   }
 
+  async function handleStatusChange(newStatus: Listing["status"]) {
+    if (newStatus === listing.status) return;
+
+    const { error } = await supabase
+      .from("listings")
+      .update({ status: newStatus })
+      .eq("id", listing.id);
+
+    if (error) {
+      console.error("Error updating status:", error);
+      alert(`Error updating status: ${error.message}`);
+      return;
+    }
+
+    router.refresh();
+  }
+
   return (
     <article
       className={`overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ${
@@ -98,6 +123,25 @@ export default function ListingCard({ listing }: Props) {
           </div>
 
           <StatusBadge status={listing.status} />
+        </div>
+
+        <div className="mb-4">
+          <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-slate-400">
+            Status
+          </label>
+          <select
+            value={listing.status}
+            onChange={(e) =>
+              handleStatusChange(e.target.value as Listing["status"])
+            }
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
+          >
+            {STATUS_OPTIONS.map((status) => (
+              <option key={status} value={status}>
+                {status.replace("_", " ")}
+              </option>
+            ))}
+          </select>
         </div>
 
         <p className="mb-4 text-2xl font-bold text-slate-900">
