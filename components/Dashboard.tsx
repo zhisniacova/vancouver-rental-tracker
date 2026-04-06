@@ -13,18 +13,27 @@ export default function Dashboard({ listings }: Props) {
   const [neighborhood, setNeighborhood] = useState("All");
   const [status, setStatus] = useState("All");
   const [sort, setSort] = useState("none");
+  const [likeFilter, setLikeFilter] = useState("all");
 
   const filtered = listings
-    .filter((l) =>
-      l.title.toLowerCase().includes(search.toLowerCase()) ||
-      l.neighborhood.toLowerCase().includes(search.toLowerCase())
+    .filter((listing) => {
+      const query = search.toLowerCase();
+      return (
+        listing.title.toLowerCase().includes(query) ||
+        listing.neighborhood.toLowerCase().includes(query)
+      );
+    })
+    .filter((listing) =>
+      neighborhood === "All" ? true : listing.neighborhood === neighborhood
     )
-    .filter((l) =>
-      neighborhood === "All" ? true : l.neighborhood === neighborhood
-    )
-    .filter((l) =>
-      status === "All" ? true : l.status === status
-    )
+    .filter((listing) => (status === "All" ? true : listing.status === status))
+    .filter((listing) => {
+      if (likeFilter === "all") return true;
+      if (likeFilter === "both") return listing.likes.length >= 2;
+      if (likeFilter === "sasha") return listing.likes.includes("Sasha");
+      if (likeFilter === "gleb") return listing.likes.includes("Gleb");
+      return true;
+    })
     .sort((a, b) => {
       if (sort === "low") return a.price - b.price;
       if (sort === "high") return b.price - a.price;
@@ -42,6 +51,8 @@ export default function Dashboard({ listings }: Props) {
         setStatus={setStatus}
         sort={sort}
         setSort={setSort}
+        likeFilter={likeFilter}
+        setLikeFilter={setLikeFilter}
       />
 
       {filtered.length === 0 ? (
