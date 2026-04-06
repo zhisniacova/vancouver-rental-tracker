@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+
+import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -32,6 +33,7 @@ type ListingFormData = {
   pros: string;
   cons: string;
   comments: string;
+  imageUrl: string;
 };
 
 type ExistingListing = {
@@ -55,6 +57,7 @@ type ExistingListing = {
   pros: string | null;
   cons: string | null;
   comments: string | null;
+  cover_image_url?: string | null;
 };
 
 type Props = {
@@ -81,6 +84,7 @@ const initialFormData: ListingFormData = {
   pros: "",
   cons: "",
   comments: "",
+  imageUrl: "",
 };
 
 const fieldClassName =
@@ -111,6 +115,7 @@ function getInitialFormData(existingListing?: ExistingListing): ListingFormData 
     pros: existingListing.pros || "",
     cons: existingListing.cons || "",
     comments: existingListing.comments || "",
+    imageUrl: existingListing.cover_image_url || "",
   };
 }
 
@@ -119,8 +124,16 @@ export default function ListingForm({ existingListing }: Props) {
   const [formData, setFormData] = useState<ListingFormData>(
     getInitialFormData(existingListing)
   );
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
+
+  const previewUrl = useMemo(() => {
+    if (coverImageFile) {
+      return URL.createObjectURL(coverImageFile);
+    }
+    return formData.imageUrl || "";
+  }, [coverImageFile, formData.imageUrl]);
 
   function handleChange(
     event: React.ChangeEvent<
@@ -134,73 +147,104 @@ export default function ListingForm({ existingListing }: Props) {
     }));
   }
 
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    setCoverImageFile(file);
+  }
+
+  async function uploadCoverImage(): Promise<string | null> {
+    if (!coverImageFile) {
+      return formData.imageUrl.trim() || null;
+    }
+
+    const fileExt = coverImageFile.name.split(".").pop();
+    const fileName = `${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}.${fileExt}`;
+    const filePath = `covers/${fileName}`;
+
+    const { error } = await supabase.storage
+      .from("listing-images")
+      .upload(filePath, coverImageFile);
+
+    if (error) {
+      throw error;
+    }
+
+    const { data } = supabase.storage
+      .from("listing-images")
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSaving(true);
     setMessage("");
 
-    const payload = {
-      url: formData.url,
-      added_by: formData.addedBy,
-      title: formData.title,
-      price: formData.price ? Number(formData.price) : null,
-      location: formData.location || null,
-      neighborhood: formData.neighborhood || null,
-      listing_type: formData.type || null,
-      furnished: formData.furnished || null,
-      earliest_move_in: formData.earliestMoveIn || null,
-      sqft: formData.sqft ? Number(formData.sqft) : null,
-      contact_name: formData.contactName || null,
-      contact_email: formData.contactEmail || null,
-      contact_phone: formData.contactPhone || null,
-      status: formData.status,
-      messaged_by: formData.messagedBy === "None" ? null : formData.messagedBy,
-      viewing_date: formData.viewingDate || null,
-      pros: formData.pros || null,
-      cons: formData.cons || null,
-      comments: formData.comments || null,
-    };
+    try {
+      const coverImageUrl = await uploadCoverImage();
 
-    if (existingListing) {
-      const { error } = await supabase
-        .from("listings")
-        .update(payload)
-        .eq("id", existingListing.id);
+      const payload = {
+        url: formData.url,
+        added_by: formData.addedBy,
+        title: formData.title,
+        price: formData.price ? Number(formData.price) : null,
+        location: formData.location || null,
+        neighborhood: formData.neighborhood || null,
+        listing_type: formData.type || null,
+        furnished: formData.furnished || null,
+        earliest_move_in: formData.earliestMoveIn || null,
+        sqft: formData.sqft ? Number(formData.sqft) : null,
+        contact_name: formData.contactName || null,
+        contact_email: formData.contactEmail || null,
+        contact_phone: formData.contactPhone || null,
+        status: formData.status,
+        messaged_by:
+          formData.messagedBy === "None" ? null : formData.messagedBy,
+        viewing_date: formData.viewingDate || null,
+        pros: formData.pros || null,
+        cons: formData.cons || null,
+        comments: formData.comments || null,
+        cover_image_url: coverImageUrl,
+      };
 
-      if (error) {
-        console.error("Error updating listing:", error);
-        setMessage(`Could not update listing: ${error.message}`);
-        setIsSaving(false);
-        return;
+      if (existingListing) {
+        const { error } = await supabase
+          .from("listings")
+          .update(payload)
+          .eq("id", existingListing.id);
+
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from("listings")
+          .insert([payload])
+          .select("id")
+          .single();
+
+        if (error) throw error;
+
+        const { error: likeError } = await supabase.from("listing_likes").insert([
+          {
+            listing_id: data.id,
+            user_name: formData.addedBy,
+          },
+        ]);
+
+        if (likeError) {
+          console.error("Error creating initial like:", likeError);
+        }
       }
-    } else {
-      const { data, error } = await supabase
-        .from("listings")
-        .insert([payload])
-        .select("id")
-        .single();
 
-      if (error) {
-        console.error("Error creating listing:", error);
-        setMessage(`Could not save listing: ${error.message}`);
-        setIsSaving(false);
-        return;
-      }
-
-      const { error: likeError } = await supabase.from("listing_likes").insert([
-        {
-          listing_id: data.id,
-          user_name: formData.addedBy,
-        },
-      ]);
-
-      if (likeError) {
-        console.error("Error creating initial like:", likeError);
-      }
+      router.push("/");
+      router.refresh();
+    } catch (error: any) {
+      console.error("Error saving listing:", error);
+      setMessage(`Could not save listing: ${error.message}`);
+      setIsSaving(false);
     }
-
-    router.push("/");
-    router.refresh();
   }
 
   return (
@@ -222,6 +266,61 @@ export default function ListingForm({ existingListing }: Props) {
             className={fieldClassName}
             required
           />
+        </div>
+
+        <div className="md:col-span-2 grid gap-5 md:grid-cols-2">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Upload cover image
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              Uploading a file will override the pasted image URL.
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Or paste image URL
+            </label>
+            <input
+              name="imageUrl"
+              type="url"
+              value={formData.imageUrl}
+              onChange={handleChange}
+              placeholder="https://..."
+              className={fieldClassName}
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              Good for quick copy-paste from a listing page.
+            </p>
+          </div>
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="mb-2 block text-sm font-medium text-slate-700">
+            Image preview
+          </label>
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+            {previewUrl ? (
+              <div className="h-56 w-full">
+                <img
+                  src={previewUrl}
+                  alt="Cover preview"
+                  className="object-cover"
+                />
+              </div>
+            ) : (
+              <div className="flex h-56 items-center justify-center text-sm text-slate-500">
+                No image selected yet
+              </div>
+            )}
+          </div>
         </div>
 
         <div>

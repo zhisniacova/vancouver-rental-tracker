@@ -18,6 +18,7 @@ export type Listing = {
   likes: string[];
   comments: string;
   url: string;
+  coverImageUrl?: string | null;
 };
 
 type Props = {
@@ -106,13 +107,24 @@ export default function ListingCard({ listing }: Props) {
         bothLiked ? "ring-emerald-300" : "ring-slate-200"
       }`}
     >
-      <div className="relative flex h-48 items-center justify-center bg-slate-200 text-sm text-slate-500">
+      <div className="relative h-48 bg-slate-200">
         {bothLiked && (
-          <div className="absolute left-3 top-3 rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-white shadow-sm">
+          <div className="absolute left-3 top-3 z-10 rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-white shadow-sm">
             Both liked
           </div>
         )}
-        Listing photo
+
+        {listing.coverImageUrl ? (
+          <img
+            src={listing.coverImageUrl}
+            alt={listing.title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-sm text-slate-500">
+            Listing photo
+          </div>
+        )}
       </div>
 
       <div className="p-5">

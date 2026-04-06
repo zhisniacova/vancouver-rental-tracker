@@ -43,6 +43,7 @@ async function getListings(): Promise<Listing[]> {
         .map((like) => like.user_name) ?? [],
     comments: item.comments ?? "",
     url: item.url,
+    coverImageUrl: item.cover_image_url ?? null,
   }));
 }
 
