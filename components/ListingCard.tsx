@@ -101,6 +101,39 @@ export default function ListingCard({ listing }: Props) {
     router.refresh();
   }
 
+  async function checkIfStillActive() {
+    try {
+      const response = await fetch("/api/check-listing", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          listingId: listing.id,
+          url: listing.url,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        alert(`Check failed: ${result.error || "Unknown error"}`);
+        return;
+      }
+
+      if (result.expired) {
+        alert(`Listing marked as expired (${result.reason}).`);
+      } else {
+        alert("Listing still looks active.");
+      }
+
+      router.refresh();
+    } catch (error) {
+      console.error("Error checking listing:", error);
+      alert("Could not check listing status.");
+    }
+  }
+
   return (
     <article
       className={`overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ${
@@ -187,14 +220,23 @@ export default function ListingCard({ listing }: Props) {
             </p>
           </div>
 
-          <a
-            href={listing.url}
-            target="_blank"
-            rel="noreferrer"
-            className="font-medium text-slate-900 underline underline-offset-2"
-          >
-            Open listing
-          </a>
+          <div className="flex flex-col items-end gap-1">
+            <a
+              href={listing.url}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-slate-900 underline underline-offset-2"
+            >
+              Open listing
+            </a>
+
+            <button
+              onClick={checkIfStillActive}
+              className="text-xs text-slate-500 underline hover:text-slate-700"
+            >
+              Check if still active
+            </button>
+          </div>
         </div>
 
         <div className="mb-4 flex gap-2">
