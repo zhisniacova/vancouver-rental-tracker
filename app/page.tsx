@@ -9,17 +9,25 @@ const supabase = createClient(
 );
 
 async function getListings(): Promise<Listing[]> {
-  const { data, error } = await supabase
+  const { data: listings, error: listingsError } = await supabase
     .from("listings")
     .select("*")
     .order("created_at", { ascending: false });
 
-  if (error) {
-    console.error("Error fetching listings:", error);
+  if (listingsError) {
+    console.error("Error fetching listings:", listingsError);
     return [];
   }
 
-  return data.map((item) => ({
+  const { data: likes, error: likesError } = await supabase
+    .from("listing_likes")
+    .select("*");
+
+  if (likesError) {
+    console.error("Error fetching likes:", likesError);
+  }
+
+  return listings.map((item) => ({
     id: item.id,
     title: item.title,
     price: item.price ?? 0,
@@ -29,7 +37,10 @@ async function getListings(): Promise<Listing[]> {
     moveInDate: item.earliest_move_in ?? "",
     addedBy: item.added_by,
     status: item.status,
-    likes: [],
+    likes:
+      likes
+        ?.filter((like) => like.listing_id === item.id)
+        .map((like) => like.user_name) ?? [],
     comments: item.comments ?? "",
     url: item.url,
   }));

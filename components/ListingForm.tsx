@@ -87,9 +87,7 @@ const fieldClassName =
   "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-400";
 
 function getInitialFormData(existingListing?: ExistingListing): ListingFormData {
-  if (!existingListing) {
-    return initialFormData;
-  }
+  if (!existingListing) return initialFormData;
 
   return {
     url: existingListing.url || "",
@@ -163,17 +161,42 @@ export default function ListingForm({ existingListing }: Props) {
       comments: formData.comments || null,
     };
 
-    const query = existingListing
-      ? supabase.from("listings").update(payload).eq("id", existingListing.id)
-      : supabase.from("listings").insert([payload]);
+    if (existingListing) {
+      const { error } = await supabase
+        .from("listings")
+        .update(payload)
+        .eq("id", existingListing.id);
 
-    const { error } = await query;
+      if (error) {
+        console.error("Error updating listing:", error);
+        setMessage(`Could not update listing: ${error.message}`);
+        setIsSaving(false);
+        return;
+      }
+    } else {
+      const { data, error } = await supabase
+        .from("listings")
+        .insert([payload])
+        .select("id")
+        .single();
 
-    if (error) {
-      console.error("Error saving listing:", error);
-      setMessage(`Could not save listing: ${error.message}`);
-      setIsSaving(false);
-      return;
+      if (error) {
+        console.error("Error creating listing:", error);
+        setMessage(`Could not save listing: ${error.message}`);
+        setIsSaving(false);
+        return;
+      }
+
+      const { error: likeError } = await supabase.from("listing_likes").insert([
+        {
+          listing_id: data.id,
+          user_name: formData.addedBy,
+        },
+      ]);
+
+      if (likeError) {
+        console.error("Error creating initial like:", likeError);
+      }
     }
 
     router.push("/");
@@ -474,9 +497,7 @@ export default function ListingForm({ existingListing }: Props) {
         </div>
       </div>
 
-      {message && (
-        <p className="text-sm font-medium text-red-600">{message}</p>
-      )}
+      {message && <p className="text-sm font-medium text-red-600">{message}</p>}
 
       <div className="flex items-center justify-end gap-3">
         <Link
@@ -495,8 +516,8 @@ export default function ListingForm({ existingListing }: Props) {
               ? "Updating..."
               : "Saving..."
             : existingListing
-              ? "Update listing"
-              : "Save listing"}
+            ? "Update listing"
+            : "Save listing"}
         </button>
       </div>
     </form>

@@ -42,6 +42,37 @@ export default function ListingCard({ listing }: Props) {
     router.refresh();
   }
 
+  async function toggleLike(userName: string) {
+    const alreadyLiked = listing.likes.includes(userName);
+
+    if (alreadyLiked) {
+      const { error } = await supabase
+        .from("listing_likes")
+        .delete()
+        .eq("listing_id", listing.id)
+        .eq("user_name", userName);
+
+      if (error) {
+        console.error("Error removing like:", error);
+        return;
+      }
+    } else {
+      const { error } = await supabase.from("listing_likes").insert([
+        {
+          listing_id: listing.id,
+          user_name: userName,
+        },
+      ]);
+
+      if (error) {
+        console.error("Error adding like:", error);
+        return;
+      }
+    }
+
+    router.refresh();
+  }
+
   return (
     <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
       <div className="flex h-48 items-center justify-center bg-slate-200 text-sm text-slate-500">
@@ -82,7 +113,13 @@ export default function ListingCard({ listing }: Props) {
         </div>
 
         <div className="mb-4 flex items-center justify-between text-sm text-slate-600">
-          <p>❤️ {listing.likes.length} likes</p>
+          <div>
+            <p>❤️ {listing.likes.length} likes</p>
+            <p className="text-xs text-slate-500">
+              {listing.likes.length > 0 ? listing.likes.join(", ") : "No likes yet"}
+            </p>
+          </div>
+
           <a
             href={listing.url}
             target="_blank"
@@ -91,6 +128,30 @@ export default function ListingCard({ listing }: Props) {
           >
             Open listing
           </a>
+        </div>
+
+        <div className="mb-4 flex gap-2">
+          <button
+            onClick={() => toggleLike("Sasha")}
+            className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium ${
+              listing.likes.includes("Sasha")
+                ? "border-pink-200 bg-pink-50 text-pink-700"
+                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            {listing.likes.includes("Sasha") ? "♥ Sasha liked" : "♡ Sasha like"}
+          </button>
+
+          <button
+            onClick={() => toggleLike("Gleb")}
+            className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium ${
+              listing.likes.includes("Gleb")
+                ? "border-pink-200 bg-pink-50 text-pink-700"
+                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            {listing.likes.includes("Gleb") ? "♥ Gleb liked" : "♡ Gleb like"}
+          </button>
         </div>
 
         <div className="mb-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
