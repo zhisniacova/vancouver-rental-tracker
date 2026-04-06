@@ -1,5 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
 import ListingForm from "@/components/ListingForm";
+import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,27 +14,36 @@ async function getListing(id: string) {
     .single();
 
   if (error) {
-    console.error(error);
+    console.error("Error fetching listing:", error);
     return null;
   }
 
   return data;
 }
 
-export default async function EditPage({ params }: { params: { id: string } }) {
-  const listing = await getListing(params.id);
+type EditPageProps = {
+  params: Promise<{ id: string }>;
+};
+
+export default async function EditPage({ params }: EditPageProps) {
+  const { id } = await params;
+  const listing = await getListing(id);
 
   if (!listing) {
-    return <p>Listing not found</p>;
+    return (
+      <main className="min-h-screen bg-slate-50 px-6 py-8">
+        <div className="mx-auto max-w-3xl">
+          <h1 className="mb-4 text-3xl font-bold text-slate-900">Edit Listing</h1>
+          <p className="text-slate-600">Listing not found.</p>
+        </div>
+      </main>
+    );
   }
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8">
       <div className="mx-auto max-w-3xl">
-        <h1 className="mb-6 text-3xl font-bold text-slate-900">
-          Edit Listing
-        </h1>
-
+        <h1 className="mb-6 text-3xl font-bold text-slate-900">Edit Listing</h1>
         <ListingForm existingListing={listing} />
       </div>
     </main>
