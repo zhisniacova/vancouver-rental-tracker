@@ -1,5 +1,6 @@
-import FilterBar from "@/components/FilterBar";
-import ListingCard, { Listing } from "@/components/ListingCard";
+import Dashboard from "@/components/Dashboard";
+import { Listing } from "@/components/ListingCard";
+import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -14,7 +15,7 @@ async function getListings(): Promise<Listing[]> {
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error(error);
+    console.error("Error fetching listings:", error);
     return [];
   }
 
@@ -28,7 +29,7 @@ async function getListings(): Promise<Listing[]> {
     moveInDate: item.earliest_move_in ?? "",
     addedBy: item.added_by,
     status: item.status,
-    likes: [], // we'll implement later
+    likes: [],
     comments: item.comments ?? "",
     url: item.url,
   }));
@@ -48,25 +49,15 @@ export default async function Home() {
             </h1>
           </div>
 
-          <a
+          <Link
             href="/add-listing"
             className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
           >
             + Add listing
-          </a>
+          </Link>
         </header>
 
-        <FilterBar />
-
-        {listings.length === 0 ? (
-          <p className="text-slate-500">No listings yet. Add one!</p>
-        ) : (
-          <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {listings.map((listing) => (
-              <ListingCard key={listing.id} listing={listing} />
-            ))}
-          </section>
-        )}
+        <Dashboard listings={listings} />
       </div>
     </main>
   );

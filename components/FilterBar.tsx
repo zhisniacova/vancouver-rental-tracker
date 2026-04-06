@@ -1,36 +1,59 @@
-export default function FilterBar() {
-  const fieldClassName =
-    "w-full rounded-xl border border-slate-200 px-4 py-2 text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-400 bg-white";
+type Props = {
+  search: string;
+  setSearch: (v: string) => void;
+  neighborhood: string;
+  setNeighborhood: (v: string) => void;
+  status: string;
+  setStatus: (v: string) => void;
+  sort: string;
+  setSort: (v: string) => void;
+};
+
+export default function FilterBar({
+  search,
+  setSearch,
+  neighborhood,
+  setNeighborhood,
+  status,
+  setStatus,
+  sort,
+  setSort,
+}: Props) {
+  const field =
+    "rounded-xl border border-slate-200 px-4 py-2 text-slate-900 bg-white outline-none focus:border-slate-400";
 
   return (
     <section className="mb-6 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
       <div className="flex flex-col gap-3 md:flex-row">
         <input
-          type="text"
-          placeholder="Search by title or neighborhood"
-          className={`flex-1 ${fieldClassName}`}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search..."
+          className={`flex-1 ${field}`}
         />
 
-        <select className={fieldClassName}>
-          <option>All neighborhoods</option>
+        <select value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} className={field}>
+          <option>All</option>
           <option>Kitsilano</option>
           <option>Yaletown</option>
           <option>Olympic Village</option>
+          <option>Fairview</option>
+          <option>West End</option>
         </select>
 
-        <select className={fieldClassName}>
-          <option>All statuses</option>
-          <option>New</option>
-          <option>Messaged</option>
-          <option>Viewing Scheduled</option>
-          <option>Viewed</option>
-          <option>Expired</option>
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className={field}>
+          <option>All</option>
+          <option value="new">new</option>
+          <option value="messaged">messaged</option>
+          <option value="viewing_scheduled">viewing_scheduled</option>
+          <option value="viewed">viewed</option>
+          <option value="expired">expired</option>
         </select>
 
-        <select className={fieldClassName}>
-          <option>Sort by price</option>
-          <option>Lowest to highest</option>
-          <option>Highest to lowest</option>
+        <select value={sort} onChange={(e) => setSort(e.target.value)} className={field}>
+          <option value="none">Sort</option>
+          <option value="low">Price ↑</option>
+          <option value="high">Price ↓</option>
         </select>
       </div>
     </section>
