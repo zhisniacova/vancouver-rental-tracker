@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import ListingCard, { Listing } from "./ListingCard";
 import FilterBar from "./FilterBar";
+import StatusBadge from "./StatusBadge";
 
 type Props = {
   listings: Listing[];
@@ -30,6 +32,66 @@ function needsAction(listing: Listing) {
     listing.likes.includes("Sasha") && listing.likes.includes("Gleb");
 
   return bothLiked && listing.status === "new";
+}
+
+function TopPickCompactCard({ listing }: { listing: Listing }) {
+  const averageScore = getAverageScore(listing);
+
+  return (
+    <article className="overflow-hidden rounded-xl bg-white ring-1 ring-emerald-200">
+      <div className="relative h-28 bg-slate-200">
+        {listing.coverImageUrl ? (
+          <img
+            src={listing.coverImageUrl}
+            alt={listing.title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-xs text-slate-500">
+            Listing photo
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-3 p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="truncate text-sm font-semibold text-slate-900">
+              {listing.title}
+            </h3>
+            <p className="text-xs text-slate-500">{listing.neighborhood}</p>
+          </div>
+          <StatusBadge status={listing.status} />
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-bold text-slate-900">
+            ${listing.price.toLocaleString()}
+          </p>
+          {averageScore > 0 && (
+            <p className="text-xs font-medium text-slate-600">
+              ⭐ {averageScore.toFixed(1)}
+            </p>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Link
+            href={`/listing/${listing.id}`}
+            className="rounded-lg border border-slate-200 px-2 py-1.5 text-center text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            View
+          </Link>
+          <Link
+            href={`/message/${listing.id}`}
+            className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-center text-xs font-medium text-blue-700 hover:bg-blue-100"
+          >
+            Message
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
 }
 
 export default function Dashboard({ listings }: Props) {
@@ -82,9 +144,9 @@ export default function Dashboard({ listings }: Props) {
                 </p>
               </div>
 
-              <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {topPicks.map((listing) => (
-                  <ListingCard key={`top-${listing.id}`} listing={listing} />
+                  <TopPickCompactCard key={`top-${listing.id}`} listing={listing} />
                 ))}
               </section>
             </div>
