@@ -26,15 +26,15 @@ type Props = {
 const SENDERS = {
   Sasha: {
     displayName: "Sasha",
-    fullName: "Sasha",
-    email: "your-email@example.com",
-    phone: "604-000-0000",
+    fullName: "Alexandra Chistyakov Klochko",
+    email: "zhisniacova@gmail.com",
+    phone: "604-787-7039",
   },
   Gleb: {
     displayName: "Gleb",
-    fullName: "Gleb",
-    email: "gleb-email@example.com",
-    phone: "604-000-0001",
+    fullName: "Gleb Valiakhmetov",
+    email: "glebikus1@gmail.com",
+    phone: "778-697-7316",
   },
 } as const;
 
@@ -69,7 +69,7 @@ function buildBody({
 
   return `${greeting}
 
-I hope you're doing well. My name is ${sender.fullName}, and I am reaching out about ${listingReference}${listing.url ? ` (${listing.url})` : ""}.
+I hope this message finds you well! My name is ${sender.fullName}, and I am reaching out about ${listingReference}${listing.url ? ` (${listing.url})` : ""}.
 
 Me and my partner are very interested in the place. It looks like a strong fit, and I would love to learn whether it is still available.
 
