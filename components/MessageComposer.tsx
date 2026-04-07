@@ -94,9 +94,10 @@ export default function MessageComposer({ listing }: Props) {
   const [recipientPhone, setRecipientPhone] = useState(listing.contact_phone ?? "");
   const [subject, setSubject] = useState(buildSubject(listing));
   const [customIntro, setCustomIntro] = useState("");
+  const [bodyOverride, setBodyOverride] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  const body = useMemo(() => {
+  const templateBody = useMemo(() => {
     const base = buildBody({
       listing,
       senderName,
@@ -111,6 +112,8 @@ export default function MessageComposer({ listing }: Props) {
 
     return `${lines[0]}\n\n${customIntro.trim()}\n\n${lines.slice(1).join("\n\n")}`;
   }, [listing, senderName, messageType, recipientName, customIntro]);
+  const body = bodyOverride ?? templateBody;
+  const isBodyEdited = bodyOverride !== null;
 
   const gmailLink = useMemo(() => {
     const to = encodeURIComponent(recipientEmail);
@@ -177,8 +180,16 @@ export default function MessageComposer({ listing }: Props) {
     router.refresh();
   }
 
+  function handleBodyChange(nextBody: string) {
+    setBodyOverride(nextBody);
+  }
+
+  function resetBodyToTemplate() {
+    setBodyOverride(null);
+  }
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr]">
+    <div className="grid items-stretch gap-6 lg:grid-cols-[0.9fr_1.3fr]">
       <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
         <h2 className="mb-4 text-xl font-semibold text-slate-900">
           Message Setup
@@ -297,9 +308,9 @@ export default function MessageComposer({ listing }: Props) {
         </div>
       </section>
 
-      <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+      <section className="flex min-h-[760px] h-full flex-col rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
         <h2 className="mb-4 text-xl font-semibold text-slate-900">
-          Message Preview
+          Message Editor
         </h2>
 
         <div className="mb-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
@@ -317,11 +328,32 @@ export default function MessageComposer({ listing }: Props) {
           )}
         </div>
 
-        <pre className="mb-6 whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
-{body}
-        </pre>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <p className="text-xs text-slate-500">
+            Edit this message directly before sending or copying.
+          </p>
+          <button
+            type="button"
+            onClick={resetBodyToTemplate}
+            className={`text-xs font-medium underline underline-offset-2 ${
+              isBodyEdited
+                ? "text-slate-700 hover:text-slate-900"
+                : "cursor-not-allowed text-slate-400"
+            }`}
+            disabled={!isBodyEdited}
+          >
+            Reset to template
+          </button>
+        </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <textarea
+          rows={16}
+          value={body}
+          onChange={(e) => handleBodyChange(e.target.value)}
+          className="mb-4 w-full min-h-[360px] flex-1 resize-y rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 outline-none focus:border-slate-400"
+        />
+
+        <div className="mt-auto grid gap-3 sm:grid-cols-2">
           <button
             onClick={copyToClipboard}
             className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white hover:bg-slate-700"

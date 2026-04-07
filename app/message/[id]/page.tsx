@@ -32,7 +32,7 @@ export default async function MessagePage({ params }: MessagePageProps) {
   if (!listing) {
     return (
       <main className="min-h-screen bg-slate-50 px-6 py-8">
-        <div className="mx-auto max-w-4xl">
+        <div className="mx-auto w-full max-w-7xl">
           <h1 className="mb-4 text-3xl font-bold text-slate-900">Message Listing</h1>
           <p className="text-slate-600">Listing not found.</p>
         </div>
@@ -42,7 +42,7 @@ export default async function MessagePage({ params }: MessagePageProps) {
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8">
-      <div className="mx-auto max-w-4xl">
+      <div className="mx-auto w-full max-w-7xl">
         <div className="mb-6">
           <p className="text-sm font-medium text-slate-500">Outreach</p>
           <h1 className="text-3xl font-bold text-slate-900">Message Listing</h1>
