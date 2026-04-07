@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import StatusBadge from "@/components/StatusBadge";
+import MessageHistory from "@/components/MessageHistory";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -256,68 +257,7 @@ export default async function ListingDetailsPage({ params }: ListingPageProps) {
           </section>
         </div>
 
-        <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <div className="mb-4">
-            <p className="text-sm font-medium text-slate-500">Activity</p>
-            <h2 className="text-2xl font-bold text-slate-900">Message History</h2>
-          </div>
-
-          {messages.length === 0 ? (
-            <p className="text-slate-500">No saved messages yet.</p>
-          ) : (
-            <div className="space-y-4">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                >
-                  <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="font-medium text-slate-900">
-                        {message.sender_name} · {message.message_type}
-                      </p>
-                      <p className="text-sm text-slate-500">
-                        {new Date(message.created_at).toLocaleString()}
-                      </p>
-                    </div>
-
-                    {message.subject && (
-                      <div className="text-sm text-slate-600">
-                        <span className="font-medium text-slate-900">Subject:</span>{" "}
-                        {message.subject}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mb-3 text-sm text-slate-600">
-                    {message.recipient_name && (
-                      <p>
-                        <span className="font-medium text-slate-900">Recipient:</span>{" "}
-                        {message.recipient_name}
-                      </p>
-                    )}
-                    {message.recipient_email && (
-                      <p>
-                        <span className="font-medium text-slate-900">Email:</span>{" "}
-                        {message.recipient_email}
-                      </p>
-                    )}
-                    {message.recipient_phone && (
-                      <p>
-                        <span className="font-medium text-slate-900">Phone:</span>{" "}
-                        {message.recipient_phone}
-                      </p>
-                    )}
-                  </div>
-
-                  <pre className="whitespace-pre-wrap rounded-xl bg-white p-4 text-sm text-slate-700 ring-1 ring-slate-200">
-{message.body}
-                  </pre>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+        <MessageHistory listingId={listing.id} initialMessages={messages} />
       </div>
     </main>
   );

@@ -4,6 +4,13 @@ type StatusBadgeProps = {
   status: ListingStatus;
 };
 
+export function formatStatusLabel(status: string) {
+  return status
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function getStatusStyles(status: ListingStatus) {
   switch (status) {
     case "new":
@@ -24,7 +31,7 @@ function getStatusStyles(status: ListingStatus) {
 export default function StatusBadge({ status }: StatusBadgeProps) {
   return (
     <span className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusStyles(status)}`}>
-      {status.replace("_", " ")}
+      {formatStatusLabel(status)}
     </span>
   );
 }

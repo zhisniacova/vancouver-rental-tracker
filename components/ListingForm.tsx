@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "./CurrentUserProvider";
+import { formatStatusLabel } from "./StatusBadge";
 import { useNeighborhoodOptions } from "./useNeighborhoodOptions";
 
 type ListingStatus =
@@ -543,11 +544,11 @@ export default function ListingForm({ existingListing }: Props) {
             onChange={handleChange}
             className={fieldClassName}
           >
-            <option value="new">new</option>
-            <option value="messaged">messaged</option>
-            <option value="viewing_scheduled">viewing_scheduled</option>
-            <option value="viewed">viewed</option>
-            <option value="expired">expired</option>
+            <option value="new">{formatStatusLabel("new")}</option>
+            <option value="messaged">{formatStatusLabel("messaged")}</option>
+            <option value="viewing_scheduled">{formatStatusLabel("viewing_scheduled")}</option>
+            <option value="viewed">{formatStatusLabel("viewed")}</option>
+            <option value="expired">{formatStatusLabel("expired")}</option>
           </select>
         </div>
 

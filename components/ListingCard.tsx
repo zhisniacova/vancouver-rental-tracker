@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import StatusBadge from "./StatusBadge";
+import { formatStatusLabel } from "./StatusBadge";
 import { useCurrentUser } from "./CurrentUserProvider";
 
 export type Listing = {
@@ -220,7 +221,7 @@ export default function ListingCard({ listing }: Props) {
           >
             {STATUS_OPTIONS.map((status) => (
               <option key={status} value={status}>
-                {status.replace("_", " ")}
+                {formatStatusLabel(status)}
               </option>
             ))}
           </select>

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatStatusLabel } from "./StatusBadge";
 import { useNeighborhoodOptions } from "./useNeighborhoodOptions";
 
 type Props = {
@@ -61,11 +62,11 @@ export default function FilterBar({
           className={field}
         >
           <option value="All">All</option>
-          <option value="new">new</option>
-          <option value="messaged">messaged</option>
-          <option value="viewing_scheduled">viewing_scheduled</option>
-          <option value="viewed">viewed</option>
-          <option value="expired">expired</option>
+          <option value="new">{formatStatusLabel("new")}</option>
+          <option value="messaged">{formatStatusLabel("messaged")}</option>
+          <option value="viewing_scheduled">{formatStatusLabel("viewing_scheduled")}</option>
+          <option value="viewed">{formatStatusLabel("viewed")}</option>
+          <option value="expired">{formatStatusLabel("expired")}</option>
         </select>
 
         <select
