@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useCurrentUser } from "./CurrentUserProvider";
 
 type ListingRecord = {
   id: string;
@@ -25,15 +26,15 @@ type Props = {
 const SENDERS = {
   Sasha: {
     displayName: "Sasha",
-    fullName: "Alexandra Chistyakov Klochko",
-    email: "zhisniacova@gmail.com",
-    phone: "604-787-7039",
+    fullName: "Sasha",
+    email: "your-email@example.com",
+    phone: "604-000-0000",
   },
   Gleb: {
     displayName: "Gleb",
-    fullName: "Gleb Valiakhmetov",
-    email: "glebikus1@gmail.com",
-    phone: "778-697-7316",
+    fullName: "Gleb",
+    email: "gleb-email@example.com",
+    phone: "604-000-0001",
   },
 } as const;
 
@@ -84,8 +85,9 @@ ${contactLine}`;
 
 export default function MessageComposer({ listing }: Props) {
   const router = useRouter();
+  const { currentUser } = useCurrentUser();
 
-  const [senderName, setSenderName] = useState<SenderName>("Sasha");
+  const [senderName, setSenderName] = useState<SenderName>(currentUser);
   const [messageType, setMessageType] = useState<MessageType>("Email");
   const [recipientName, setRecipientName] = useState(listing.contact_name ?? "");
   const [recipientEmail, setRecipientEmail] = useState(listing.contact_email ?? "");

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import StatusBadge from "./StatusBadge";
+import { useCurrentUser } from "./CurrentUserProvider";
 
 export type Listing = {
   id: string;
@@ -47,9 +48,12 @@ function getAverageScore(listing: Listing) {
 
 export default function ListingCard({ listing }: Props) {
   const router = useRouter();
+  const { currentUser } = useCurrentUser();
   const bothLiked =
     listing.likes.includes("Sasha") && listing.likes.includes("Gleb");
   const averageScore = getAverageScore(listing);
+
+  const otherUser = currentUser === "Sasha" ? "Gleb" : "Sasha";
 
   async function handleDelete() {
     const confirmDelete = window.confirm("Delete this listing?");
@@ -66,7 +70,7 @@ export default function ListingCard({ listing }: Props) {
     router.refresh();
   }
 
-  async function toggleLike(userName: string) {
+  async function toggleLike(userName: "Sasha" | "Gleb") {
     const alreadyLiked = listing.likes.includes(userName);
 
     if (alreadyLiked) {
@@ -274,25 +278,29 @@ export default function ListingCard({ listing }: Props) {
 
         <div className="mb-4 flex gap-2">
           <button
-            onClick={() => toggleLike("Sasha")}
+            onClick={() => toggleLike(currentUser)}
             className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium ${
-              listing.likes.includes("Sasha")
+              listing.likes.includes(currentUser)
                 ? "border-pink-200 bg-pink-50 text-pink-700"
                 : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
             }`}
           >
-            {listing.likes.includes("Sasha") ? "♥ Sasha liked" : "♡ Sasha like"}
+            {listing.likes.includes(currentUser)
+              ? `♥ ${currentUser} liked`
+              : `♡ ${currentUser} like`}
           </button>
 
           <button
-            onClick={() => toggleLike("Gleb")}
+            onClick={() => toggleLike(otherUser)}
             className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium ${
-              listing.likes.includes("Gleb")
+              listing.likes.includes(otherUser)
                 ? "border-pink-200 bg-pink-50 text-pink-700"
                 : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
             }`}
           >
-            {listing.likes.includes("Gleb") ? "♥ Gleb liked" : "♡ Gleb like"}
+            {listing.likes.includes(otherUser)
+              ? `♥ ${otherUser} liked`
+              : `♡ ${otherUser} like`}
           </button>
         </div>
 
@@ -300,7 +308,9 @@ export default function ListingCard({ listing }: Props) {
           <select
             value={listing.sashaScore && listing.sashaScore > 0 ? listing.sashaScore : ""}
             onChange={(e) => handleScoreChange("sasha_score", e.target.value)}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
+            className={`rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400 ${
+              currentUser === "Sasha" ? "border-blue-300" : "border-slate-200"
+            }`}
           >
             <option value="">Sasha score</option>
             {Array.from({ length: 10 }, (_, i) => i + 1).map((score) => (
@@ -313,7 +323,9 @@ export default function ListingCard({ listing }: Props) {
           <select
             value={listing.glebScore && listing.glebScore > 0 ? listing.glebScore : ""}
             onChange={(e) => handleScoreChange("gleb_score", e.target.value)}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
+            className={`rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400 ${
+              currentUser === "Gleb" ? "border-blue-300" : "border-slate-200"
+            }`}
           >
             <option value="">Gleb score</option>
             {Array.from({ length: 10 }, (_, i) => i + 1).map((score) => (

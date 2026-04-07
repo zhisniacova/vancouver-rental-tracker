@@ -1,10 +1,10 @@
 "use client";
 
-
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { useCurrentUser } from "./CurrentUserProvider";
 
 type ListingStatus =
   | "new"
@@ -64,38 +64,41 @@ type Props = {
   existingListing?: ExistingListing;
 };
 
-const initialFormData: ListingFormData = {
-  url: "",
-  addedBy: "Sasha",
-  title: "",
-  price: "",
-  location: "",
-  neighborhood: "Kitsilano",
-  type: "Studio",
-  furnished: "No",
-  earliestMoveIn: "",
-  sqft: "",
-  contactName: "",
-  contactEmail: "",
-  contactPhone: "",
-  status: "new",
-  messagedBy: "None",
-  viewingDate: "",
-  pros: "",
-  cons: "",
-  comments: "",
-  imageUrl: "",
-};
-
 const fieldClassName =
   "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-400";
 
-function getInitialFormData(existingListing?: ExistingListing): ListingFormData {
-  if (!existingListing) return initialFormData;
+function getInitialFormData(
+  currentUser: "Sasha" | "Gleb",
+  existingListing?: ExistingListing
+): ListingFormData {
+  if (!existingListing) {
+    return {
+      url: "",
+      addedBy: currentUser,
+      title: "",
+      price: "",
+      location: "",
+      neighborhood: "Kitsilano",
+      type: "Studio",
+      furnished: "No",
+      earliestMoveIn: "",
+      sqft: "",
+      contactName: "",
+      contactEmail: "",
+      contactPhone: "",
+      status: "new",
+      messagedBy: "None",
+      viewingDate: "",
+      pros: "",
+      cons: "",
+      comments: "",
+      imageUrl: "",
+    };
+  }
 
   return {
     url: existingListing.url || "",
-    addedBy: existingListing.added_by || "Sasha",
+    addedBy: existingListing.added_by || currentUser,
     title: existingListing.title || "",
     price: existingListing.price?.toString() || "",
     location: existingListing.location || "",
@@ -121,12 +124,23 @@ function getInitialFormData(existingListing?: ExistingListing): ListingFormData 
 
 export default function ListingForm({ existingListing }: Props) {
   const router = useRouter();
+  const { currentUser } = useCurrentUser();
+
   const [formData, setFormData] = useState<ListingFormData>(
-    getInitialFormData(existingListing)
+    getInitialFormData(currentUser, existingListing)
   );
   const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!existingListing) {
+      setFormData((current) => ({
+        ...current,
+        addedBy: currentUser,
+      }));
+    }
+  }, [currentUser, existingListing]);
 
   const previewUrl = useMemo(() => {
     if (coverImageFile) {
@@ -312,7 +326,7 @@ export default function ListingForm({ existingListing }: Props) {
                 <img
                   src={previewUrl}
                   alt="Cover preview"
-                  className="object-cover"
+                  className="h-full w-full object-cover"
                 />
               </div>
             ) : (
@@ -615,8 +629,8 @@ export default function ListingForm({ existingListing }: Props) {
               ? "Updating..."
               : "Saving..."
             : existingListing
-            ? "Update listing"
-            : "Save listing"}
+              ? "Update listing"
+              : "Save listing"}
         </button>
       </div>
     </form>
