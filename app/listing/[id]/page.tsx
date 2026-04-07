@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import StatusBadge from "@/components/StatusBadge";
 import MessageHistory from "@/components/MessageHistory";
+import ListingScorePanel from "@/components/ListingScorePanel";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -113,6 +114,14 @@ export default async function ListingDetailsPage({ params }: ListingPageProps) {
               Edit
             </Link>
           </div>
+        </div>
+
+        <div className="mb-6">
+          <ListingScorePanel
+            listingId={listing.id}
+            sashaScore={listing.sasha_score}
+            glebScore={listing.gleb_score}
+          />
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">

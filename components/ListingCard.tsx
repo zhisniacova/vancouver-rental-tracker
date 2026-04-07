@@ -174,6 +174,7 @@ export default function ListingCard({ listing }: Props) {
     value: string
   ) {
     const scoreValue = value === "" ? null : Number(value);
+    const userName = person === "sasha_score" ? "Sasha" : "Gleb";
 
     const { error } = await supabase
       .from("listings")
@@ -184,6 +185,19 @@ export default function ListingCard({ listing }: Props) {
       console.error("Error updating score:", error);
       alert(`Error updating score: ${error.message}`);
       return;
+    }
+
+    if (scoreValue !== null && scoreValue > 5 && !listing.likes.includes(userName)) {
+      const { error: likeError } = await supabase.from("listing_likes").insert([
+        {
+          listing_id: listing.id,
+          user_name: userName,
+        },
+      ]);
+
+      if (likeError) {
+        console.error("Error auto-liking after score update:", likeError);
+      }
     }
 
     router.refresh();
