@@ -5,6 +5,7 @@ import Link from "next/link";
 import ListingCard, { Listing } from "./ListingCard";
 import FilterBar from "./FilterBar";
 import StatusBadge from "./StatusBadge";
+import { useCurrentUser } from "./CurrentUserProvider";
 
 type Props = {
   listings: Listing[];
@@ -25,13 +26,6 @@ function isTopPick(listing: Listing) {
     listing.likes.includes("Sasha") && listing.likes.includes("Gleb");
 
   return bothLiked && getAverageScore(listing) >= 8 && listing.status !== "expired";
-}
-
-function needsAction(listing: Listing) {
-  const bothLiked =
-    listing.likes.includes("Sasha") && listing.likes.includes("Gleb");
-
-  return bothLiked && listing.status === "new";
 }
 
 function isRecentlyAdded(createdAt?: string | null) {
@@ -64,6 +58,37 @@ const STATUS_SORT_ORDER_VIEWED_TO_NEW: Record<Listing["status"], number> = {
   new: 4,
   expired: 5,
 };
+
+type ActionTag = "Review" | "Message Soon";
+
+function getActionTagsForUser(
+  listing: Listing,
+  currentUser: "Sasha" | "Gleb"
+): ActionTag[] {
+  if (listing.status === "expired") return [];
+
+  const tags: ActionTag[] = [];
+  const addedByOtherUser =
+    listing.addedBy === "Sasha" || listing.addedBy === "Gleb"
+      ? listing.addedBy !== currentUser
+      : false;
+  const currentUserScore =
+    currentUser === "Sasha" ? listing.sashaScore ?? 0 : listing.glebScore ?? 0;
+
+  if (addedByOtherUser && currentUserScore <= 0) {
+    tags.push("Review");
+  }
+
+  const bothLiked =
+    listing.likes.includes("Sasha") && listing.likes.includes("Gleb");
+  const needsMessaging = bothLiked && listing.status === "new";
+
+  if (needsMessaging) {
+    tags.push("Message Soon");
+  }
+
+  return tags;
+}
 
 function TopPickCompactCard({ listing }: { listing: Listing }) {
   const averageScore = getAverageScore(listing);
@@ -132,7 +157,76 @@ function TopPickCompactCard({ listing }: { listing: Listing }) {
   );
 }
 
+function NeedsActionCompactCard({
+  listing,
+  tags,
+}: {
+  listing: Listing;
+  tags: ActionTag[];
+}) {
+  return (
+    <article className="w-72 flex-none overflow-hidden rounded-xl bg-white ring-1 ring-amber-200">
+      <div className="relative h-28 bg-slate-200">
+        {listing.coverImageUrl ? (
+          <img
+            src={listing.coverImageUrl}
+            alt={listing.title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-xs text-slate-500">
+            Listing photo
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-3 p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="truncate text-sm font-semibold text-slate-900">
+              {listing.title}
+            </h3>
+            <p className="text-xs text-slate-500">{listing.neighborhood}</p>
+          </div>
+          <StatusBadge status={listing.status} />
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {tags.map((tag) => (
+            <span
+              key={`${listing.id}-${tag}`}
+              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                tag === "Review"
+                  ? "bg-violet-100 text-violet-700"
+                  : "bg-amber-100 text-amber-700"
+              }`}
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Link
+            href={`/listing/${listing.id}`}
+            className="rounded-lg border border-slate-200 px-2 py-1.5 text-center text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Open
+          </Link>
+          <Link
+            href={`/message/${listing.id}`}
+            className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-center text-xs font-medium text-blue-700 hover:bg-blue-100"
+          >
+            Message
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export default function Dashboard({ listings }: Props) {
+  const { currentUser } = useCurrentUser();
   const [search, setSearch] = useState("");
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
@@ -178,7 +272,12 @@ export default function Dashboard({ listings }: Props) {
     });
 
   const topPicks = filtered.filter(isTopPick);
-  const actionItems = filtered.filter(needsAction);
+  const actionItems = filtered
+    .map((listing) => ({
+      listing,
+      tags: getActionTagsForUser(listing, currentUser),
+    }))
+    .filter((item) => item.tags.length > 0);
 
   return (
     <>
@@ -208,13 +307,17 @@ export default function Dashboard({ listings }: Props) {
                 <p className="text-sm font-medium text-amber-600">Next step</p>
                 <h2 className="text-2xl font-bold text-slate-900">Needs Action</h2>
                 <p className="text-sm text-slate-500">
-                  Both liked, but still marked as new.
+                  Items that need your review or need to be messaged soon.
                 </p>
               </div>
 
-              <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                {actionItems.map((listing) => (
-                  <ListingCard key={`action-${listing.id}`} listing={listing} />
+              <section className="flex gap-3 overflow-x-auto pb-2">
+                {actionItems.map(({ listing, tags }) => (
+                  <NeedsActionCompactCard
+                    key={`action-${listing.id}`}
+                    listing={listing}
+                    tags={tags}
+                  />
                 ))}
               </section>
             </div>
