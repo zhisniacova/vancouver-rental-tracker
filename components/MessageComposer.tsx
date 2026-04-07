@@ -133,11 +133,36 @@ export default function MessageComposer({ listing }: Props) {
   async function markAsMessaged() {
     setIsUpdating(true);
 
+    const nowIso = new Date().toISOString();
+
+    const { error: historyError } = await supabase
+      .from("listing_messages")
+      .insert([
+        {
+          listing_id: listing.id,
+          sender_name: senderName,
+          message_type: messageType,
+          recipient_name: recipientName || null,
+          recipient_email: recipientEmail || null,
+          recipient_phone: recipientPhone || null,
+          subject: messageType === "Email" ? subject : null,
+          body,
+        },
+      ]);
+
+    if (historyError) {
+      console.error("Error saving message history:", historyError);
+      alert(`Could not save message history: ${historyError.message}`);
+      setIsUpdating(false);
+      return;
+    }
+
     const { error } = await supabase
       .from("listings")
       .update({
         status: "messaged",
         messaged_by: senderName,
+        messaged_at: nowIso,
       })
       .eq("id", listing.id);
 
