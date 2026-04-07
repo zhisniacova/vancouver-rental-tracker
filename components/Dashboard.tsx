@@ -34,6 +34,22 @@ function needsAction(listing: Listing) {
   return bothLiked && listing.status === "new";
 }
 
+const STATUS_SORT_ORDER_NEW_TO_VIEWED: Record<Listing["status"], number> = {
+  new: 1,
+  messaged: 2,
+  viewing_scheduled: 3,
+  viewed: 4,
+  expired: 5,
+};
+
+const STATUS_SORT_ORDER_VIEWED_TO_NEW: Record<Listing["status"], number> = {
+  viewed: 1,
+  viewing_scheduled: 2,
+  messaged: 3,
+  new: 4,
+  expired: 5,
+};
+
 function TopPickCompactCard({ listing }: { listing: Listing }) {
   const averageScore = getAverageScore(listing);
 
@@ -96,8 +112,8 @@ function TopPickCompactCard({ listing }: { listing: Listing }) {
 
 export default function Dashboard({ listings }: Props) {
   const [search, setSearch] = useState("");
-  const [neighborhood, setNeighborhood] = useState("All");
-  const [status, setStatus] = useState("All");
+  const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [sort, setSort] = useState("none");
   const [likeFilter, setLikeFilter] = useState("all");
 
@@ -110,9 +126,15 @@ export default function Dashboard({ listings }: Props) {
       );
     })
     .filter((listing) =>
-      neighborhood === "All" ? true : listing.neighborhood === neighborhood
+      selectedNeighborhoods.length === 0
+        ? true
+        : selectedNeighborhoods.includes(listing.neighborhood)
     )
-    .filter((listing) => (status === "All" ? true : listing.status === status))
+    .filter((listing) =>
+      selectedStatuses.length === 0
+        ? true
+        : selectedStatuses.includes(listing.status)
+    )
     .filter((listing) => {
       if (likeFilter === "all") return true;
       if (likeFilter === "both") return listing.likes.length >= 2;
@@ -124,6 +146,12 @@ export default function Dashboard({ listings }: Props) {
       if (sort === "low") return a.price - b.price;
       if (sort === "high") return b.price - a.price;
       if (sort === "score") return getAverageScore(b) - getAverageScore(a);
+      if (sort === "status_new_to_viewed") {
+        return STATUS_SORT_ORDER_NEW_TO_VIEWED[a.status] - STATUS_SORT_ORDER_NEW_TO_VIEWED[b.status];
+      }
+      if (sort === "status_viewed_to_new") {
+        return STATUS_SORT_ORDER_VIEWED_TO_NEW[a.status] - STATUS_SORT_ORDER_VIEWED_TO_NEW[b.status];
+      }
       return 0;
     });
 
@@ -175,15 +203,19 @@ export default function Dashboard({ listings }: Props) {
       <FilterBar
         search={search}
         setSearch={setSearch}
-        neighborhood={neighborhood}
-        setNeighborhood={setNeighborhood}
-        status={status}
-        setStatus={setStatus}
+        selectedNeighborhoods={selectedNeighborhoods}
+        setSelectedNeighborhoods={setSelectedNeighborhoods}
+        selectedStatuses={selectedStatuses}
+        setSelectedStatuses={setSelectedStatuses}
         sort={sort}
         setSort={setSort}
         likeFilter={likeFilter}
         setLikeFilter={setLikeFilter}
       />
+
+      <p className="mb-4 text-sm text-slate-500">
+        Showing {filtered.length} of {listings.length} listings
+      </p>
 
       {filtered.length === 0 ? (
         <p className="text-slate-500">No listings match your filters.</p>

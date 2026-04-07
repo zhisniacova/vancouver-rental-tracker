@@ -200,9 +200,11 @@ export default function ListingCard({ listing }: Props) {
 
       <div className="p-5">
         <div className="mb-3 flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">{listing.title}</h2>
-            <p className="text-sm text-slate-500">{listing.neighborhood}</p>
+          <div className="min-w-0 flex-1">
+            <h2 className="h-12 overflow-hidden text-lg font-semibold leading-6 text-slate-900">
+              {listing.title}
+            </h2>
+            <p className="truncate text-sm text-slate-500">{listing.neighborhood}</p>
           </div>
 
           <StatusBadge status={listing.status} />
@@ -345,7 +347,9 @@ export default function ListingCard({ listing }: Props) {
 
         <div className="mb-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
           <p className="mb-1 font-medium text-slate-700">Comments</p>
-          <p>{listing.comments || "No comments yet."}</p>
+          <p className="h-16 overflow-y-auto pr-1">
+            {listing.comments || "No comments yet."}
+          </p>
         </div>
 
         <div className="grid grid-cols-4 gap-2">
