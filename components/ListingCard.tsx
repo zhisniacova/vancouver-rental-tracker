@@ -21,6 +21,7 @@ export type Listing = {
   comments: string;
   url: string;
   coverImageUrl?: string | null;
+  createdAt?: string | null;
   sashaScore?: number | null;
   glebScore?: number | null;
 };
@@ -47,12 +48,28 @@ function getAverageScore(listing: Listing) {
   return scores.reduce((sum, score) => sum + score, 0) / scores.length;
 }
 
+function isRecentlyAdded(createdAt?: string | null) {
+  if (!createdAt) return false;
+  const createdAtTime = new Date(createdAt).getTime();
+  if (Number.isNaN(createdAtTime)) return false;
+  const hours24 = 24 * 60 * 60 * 1000;
+  return Date.now() - createdAtTime <= hours24;
+}
+
+function hasBothScores(listing: Listing) {
+  return (
+    (listing.sashaScore ?? 0) > 0 &&
+    (listing.glebScore ?? 0) > 0
+  );
+}
+
 export default function ListingCard({ listing }: Props) {
   const router = useRouter();
   const { currentUser } = useCurrentUser();
   const bothLiked =
     listing.likes.includes("Sasha") && listing.likes.includes("Gleb");
   const averageScore = getAverageScore(listing);
+  const recentlyAdded = isRecentlyAdded(listing.createdAt) && !hasBothScores(listing);
 
   const otherUser = currentUser === "Sasha" ? "Gleb" : "Sasha";
 
@@ -179,11 +196,25 @@ export default function ListingCard({ listing }: Props) {
       }`}
     >
       <div className="relative h-48 bg-slate-200">
-        {bothLiked && (
-          <div className="absolute left-3 top-3 z-10 rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-white shadow-sm">
-            Both liked
-          </div>
-        )}
+        <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
+          {recentlyAdded && (
+            <div className="rounded-full bg-rose-500 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
+              NEW
+            </div>
+          )}
+
+          {averageScore !== null && (
+            <div className="rounded-full bg-slate-900/85 px-2.5 py-1 text-xs font-semibold text-white shadow-sm backdrop-blur-sm">
+              ⭐ {averageScore.toFixed(1)}
+            </div>
+          )}
+
+          {bothLiked && (
+            <div className="rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-white shadow-sm">
+              Both liked
+            </div>
+          )}
+        </div>
 
         {listing.coverImageUrl ? (
           <img
@@ -338,12 +369,6 @@ export default function ListingCard({ listing }: Props) {
             ))}
           </select>
         </div>
-
-        {averageScore !== null && (
-          <p className="mb-4 text-sm font-medium text-slate-700">
-            ⭐ Avg score: {averageScore.toFixed(1)}
-          </p>
-        )}
 
         <div className="mb-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
           <p className="mb-1 font-medium text-slate-700">Comments</p>

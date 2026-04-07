@@ -46,6 +46,7 @@ async function getListings(): Promise<Listing[]> {
     comments: item.comments ?? "",
     url: item.url,
     coverImageUrl: item.cover_image_url ?? null,
+    createdAt: item.created_at ?? null,
     sashaScore: item.sasha_score ?? 0,
     glebScore: item.gleb_score ?? 0,
   }));

@@ -34,6 +34,21 @@ function needsAction(listing: Listing) {
   return bothLiked && listing.status === "new";
 }
 
+function isRecentlyAdded(createdAt?: string | null) {
+  if (!createdAt) return false;
+  const createdAtTime = new Date(createdAt).getTime();
+  if (Number.isNaN(createdAtTime)) return false;
+  const hours24 = 24 * 60 * 60 * 1000;
+  return Date.now() - createdAtTime <= hours24;
+}
+
+function hasBothScores(listing: Listing) {
+  return (
+    (listing.sashaScore ?? 0) > 0 &&
+    (listing.glebScore ?? 0) > 0
+  );
+}
+
 const STATUS_SORT_ORDER_NEW_TO_VIEWED: Record<Listing["status"], number> = {
   new: 1,
   messaged: 2,
@@ -52,10 +67,17 @@ const STATUS_SORT_ORDER_VIEWED_TO_NEW: Record<Listing["status"], number> = {
 
 function TopPickCompactCard({ listing }: { listing: Listing }) {
   const averageScore = getAverageScore(listing);
+  const recentlyAdded = isRecentlyAdded(listing.createdAt) && !hasBothScores(listing);
 
   return (
     <article className="w-64 flex-none overflow-hidden rounded-xl bg-white ring-1 ring-emerald-200">
       <div className="relative h-28 bg-slate-200">
+        {recentlyAdded && (
+          <div className="absolute left-2 top-2 z-10 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm">
+            NEW
+          </div>
+        )}
+
         {listing.coverImageUrl ? (
           <img
             src={listing.coverImageUrl}
