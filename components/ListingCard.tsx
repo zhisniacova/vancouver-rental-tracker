@@ -347,7 +347,14 @@ export default function ListingCard({ listing }: Props) {
           <p>{listing.comments || "No comments yet."}</p>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
+          <Link
+            href={`/listing/${listing.id}`}
+            className="rounded-xl border border-slate-200 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
+          >
+            View
+          </Link>
+
           <Link
             href={`/message/${listing.id}`}
             className="rounded-xl border border-blue-200 bg-blue-50 py-2 text-center text-sm font-medium text-blue-700 hover:bg-blue-100"
