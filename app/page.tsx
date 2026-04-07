@@ -1,8 +1,7 @@
 import Dashboard from "@/components/Dashboard";
 import { Listing } from "@/components/ListingCard";
-import Link from "next/link";
+import AppHeader from "@/components/AppHeader";
 import { createClient } from "@supabase/supabase-js";
-import UserSwitcher from "@/components/UserSwitcher";
 
 export const dynamic = "force-dynamic";
 
@@ -58,25 +57,7 @@ export default async function Home() {
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8">
       <div className="mx-auto max-w-6xl">
-        <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm font-medium text-slate-500">Shared dashboard</p>
-            <h1 className="text-3xl font-bold text-slate-900">
-              Vancouver Rental Tracker
-            </h1>
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <UserSwitcher />
-            <Link
-              href="/add-listing"
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
-            >
-              + Add listing
-            </Link>
-          </div>
-        </header>
-
+        <AppHeader currentPath="/" />
         <Dashboard listings={listings} />
       </div>
     </main>
