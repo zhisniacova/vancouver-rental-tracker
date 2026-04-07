@@ -57,6 +57,7 @@ function buildBody({
   recipientName: string;
 }) {
   const sender = SENDERS[senderName];
+  const firstName = sender.fullName.split(" ")[0] || sender.fullName;
   const greeting = recipientName ? `Hello ${recipientName},` : "Hello,";
   const listingReference = listing.title
     ? `"${listing.title}"`
@@ -69,9 +70,9 @@ function buildBody({
 
   return `${greeting}
 
-I hope this message finds you well! My name is ${sender.fullName}, and I am reaching out about ${listingReference}${listing.url ? ` (${listing.url})` : ""}.
+I hope this message finds you well! My name is ${firstName}, and I am reaching out about ${listingReference}${listing.url ? ` (${listing.url})` : ""}.
 
-Me and my partner are very interested in the place. It looks like a strong fit, and I would love to learn whether it is still available.
+My partner and I are very interested in the place. It looks like a strong fit, and I would love to learn whether it is still available.
 
 A bit about us: we are Masters students at UBC looking for a long term rental. We are very responsible, clean, and quiet tenants, looking for a new place to call home. We can provide references and any other information you may need.
 
@@ -114,19 +115,21 @@ export default function MessageComposer({ listing }: Props) {
   }, [listing, senderName, messageType, recipientName, customIntro]);
   const body = bodyOverride ?? templateBody;
   const isBodyEdited = bodyOverride !== null;
+  const ccEmail = senderName === "Sasha" ? SENDERS.Gleb.email : SENDERS.Sasha.email;
 
   const gmailLink = useMemo(() => {
     const to = encodeURIComponent(recipientEmail);
+    const cc = encodeURIComponent(ccEmail);
     const su = encodeURIComponent(subject);
     const messageBody = encodeURIComponent(body);
 
-    return `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${su}&body=${messageBody}`;
-  }, [recipientEmail, subject, body]);
+    return `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&cc=${cc}&su=${su}&body=${messageBody}`;
+  }, [recipientEmail, ccEmail, subject, body]);
 
   async function copyToClipboard() {
     const fullText =
       messageType === "Email"
-        ? `To: ${recipientEmail}\nSubject: ${subject}\n\n${body}`
+        ? `To: ${recipientEmail}\nCc: ${ccEmail}\nSubject: ${subject}\n\n${body}`
         : body;
 
     await navigator.clipboard.writeText(fullText);
@@ -323,6 +326,10 @@ export default function MessageComposer({ listing }: Props) {
               <p className="mt-1">
                 <span className="font-medium text-slate-900">Subject:</span>{" "}
                 {subject || "—"}
+              </p>
+              <p className="mt-1">
+                <span className="font-medium text-slate-900">Cc:</span>{" "}
+                {ccEmail}
               </p>
             </>
           )}
