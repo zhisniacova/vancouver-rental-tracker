@@ -19,6 +19,8 @@ type ViewingListing = {
   cover_image_url: string | null;
 };
 
+const APP_TIME_ZONE = "America/Vancouver";
+
 async function getViewings(): Promise<ViewingListing[]> {
   const { data, error } = await supabase
     .from("listings")
@@ -34,8 +36,43 @@ async function getViewings(): Promise<ViewingListing[]> {
   return data as ViewingListing[];
 }
 
-function formatDateHeading(dateString: string) {
-  return new Date(dateString).toLocaleDateString(undefined, {
+function parseViewingDateTimeKey(dateString: string): string | null {
+  const match = dateString.match(
+    /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/
+  );
+
+  if (!match) return null;
+
+  const [, year, month, day, hour, minute] = match;
+  return `${year}-${month}-${day}T${hour}:${minute}`;
+}
+
+function getDateKeyFromDateTimeKey(dateTimeKey: string) {
+  return dateTimeKey.slice(0, 10);
+}
+
+function getCurrentDateTimeKeyInVancouver() {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+}
+
+function formatDateHeading(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+
+  return date.toLocaleDateString(undefined, {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -43,26 +80,26 @@ function formatDateHeading(dateString: string) {
   });
 }
 
-function formatTime(dateString: string) {
-  return new Date(dateString).toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
+function formatTimeFromDateTimeKey(dateTimeKey: string) {
+  const timePart = dateTimeKey.slice(11, 16);
+  const [hourRaw, minuteRaw] = timePart.split(":");
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
 
-function getDateKey(dateString: string) {
-  const date = new Date(dateString);
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const twelveHour = hour % 12 === 0 ? 12 : hour % 12;
+  const minuteText = `${minute}`.padStart(2, "0");
+  return `${twelveHour}:${minuteText} ${suffix}`;
 }
 
 function groupViewingsByDate(viewings: ViewingListing[]) {
   return viewings.reduce<Record<string, ViewingListing[]>>((groups, viewing) => {
     if (!viewing.viewing_date) return groups;
 
-    const key = getDateKey(viewing.viewing_date);
+    const dateTimeKey = parseViewingDateTimeKey(viewing.viewing_date);
+    if (!dateTimeKey) return groups;
+
+    const key = getDateKeyFromDateTimeKey(dateTimeKey);
     if (!groups[key]) {
       groups[key] = [];
     }
@@ -102,7 +139,9 @@ function renderViewingList(grouped: Record<string, ViewingListing[]>, dates: str
 
                   <div className="min-w-0 flex-1">
                     <p className="text-lg font-semibold text-slate-900">
-                      {formatTime(viewing.viewing_date!)}
+                      {formatTimeFromDateTimeKey(
+                        parseViewingDateTimeKey(viewing.viewing_date!)!
+                      )}
                     </p>
                     <p className="truncate font-medium text-slate-700">
                       {viewing.title || "Untitled listing"}
@@ -127,16 +166,20 @@ function renderViewingList(grouped: Record<string, ViewingListing[]>, dates: str
 
 export default async function ViewingsPage() {
   const viewings = await getViewings();
-  const now = new Date();
+  const currentDateTimeKey = getCurrentDateTimeKeyInVancouver();
 
   const upcomingViewings = viewings.filter((viewing) => {
     if (!viewing.viewing_date) return false;
-    return new Date(viewing.viewing_date) >= now;
+    const dateTimeKey = parseViewingDateTimeKey(viewing.viewing_date);
+    if (!dateTimeKey) return false;
+    return dateTimeKey >= currentDateTimeKey;
   });
 
   const pastViewings = viewings.filter((viewing) => {
     if (!viewing.viewing_date) return false;
-    return new Date(viewing.viewing_date) < now;
+    const dateTimeKey = parseViewingDateTimeKey(viewing.viewing_date);
+    if (!dateTimeKey) return false;
+    return dateTimeKey < currentDateTimeKey;
   });
 
   const groupedUpcomingViewings = groupViewingsByDate(upcomingViewings);
