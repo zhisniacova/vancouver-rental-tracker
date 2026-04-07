@@ -48,7 +48,7 @@ export default function FilterBar({
           onChange={(e) => setNeighborhood(e.target.value)}
           className={field}
         >
-          <option value="All">All</option>
+          <option value="All">All Neighborhoods</option>
           {neighborhoods.map((name) => (
             <option key={name} value={name}>
               {name}
@@ -61,7 +61,7 @@ export default function FilterBar({
           onChange={(e) => setStatus(e.target.value)}
           className={field}
         >
-          <option value="All">All</option>
+          <option value="All">All Statuses</option>
           <option value="new">{formatStatusLabel("new")}</option>
           <option value="messaged">{formatStatusLabel("messaged")}</option>
           <option value="viewing_scheduled">{formatStatusLabel("viewing_scheduled")}</option>

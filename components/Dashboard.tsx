@@ -38,7 +38,7 @@ function TopPickCompactCard({ listing }: { listing: Listing }) {
   const averageScore = getAverageScore(listing);
 
   return (
-    <article className="overflow-hidden rounded-xl bg-white ring-1 ring-emerald-200">
+    <article className="w-64 flex-none overflow-hidden rounded-xl bg-white ring-1 ring-emerald-200">
       <div className="relative h-28 bg-slate-200">
         {listing.coverImageUrl ? (
           <img
@@ -144,7 +144,7 @@ export default function Dashboard({ listings }: Props) {
                 </p>
               </div>
 
-              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <section className="flex gap-3 overflow-x-auto pb-2">
                 {topPicks.map((listing) => (
                   <TopPickCompactCard key={`top-${listing.id}`} listing={listing} />
                 ))}
