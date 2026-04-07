@@ -1,3 +1,7 @@
+"use client";
+
+import { useNeighborhoodOptions } from "./useNeighborhoodOptions";
+
 type Props = {
   search: string;
   setSearch: (value: string) => void;
@@ -23,6 +27,8 @@ export default function FilterBar({
   likeFilter,
   setLikeFilter,
 }: Props) {
+  const { neighborhoods } = useNeighborhoodOptions();
+
   const field =
     "rounded-xl border border-slate-200 px-4 py-2 text-slate-900 bg-white outline-none focus:border-slate-400";
 
@@ -41,12 +47,12 @@ export default function FilterBar({
           onChange={(e) => setNeighborhood(e.target.value)}
           className={field}
         >
-          <option>All</option>
-          <option>Kitsilano</option>
-          <option>Yaletown</option>
-          <option>Olympic Village</option>
-          <option>Fairview</option>
-          <option>West End</option>
+          <option value="All">All</option>
+          {neighborhoods.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
         </select>
 
         <select
@@ -54,7 +60,7 @@ export default function FilterBar({
           onChange={(e) => setStatus(e.target.value)}
           className={field}
         >
-          <option>All</option>
+          <option value="All">All</option>
           <option value="new">new</option>
           <option value="messaged">messaged</option>
           <option value="viewing_scheduled">viewing_scheduled</option>

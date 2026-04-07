@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "./CurrentUserProvider";
+import { useNeighborhoodOptions } from "./useNeighborhoodOptions";
 
 type ListingStatus =
   | "new"
@@ -125,6 +126,7 @@ function getInitialFormData(
 export default function ListingForm({ existingListing }: Props) {
   const router = useRouter();
   const { currentUser } = useCurrentUser();
+  const { neighborhoods, addNeighborhood } = useNeighborhoodOptions();
 
   const [formData, setFormData] = useState<ListingFormData>(
     getInitialFormData(currentUser, existingListing)
@@ -198,6 +200,12 @@ export default function ListingForm({ existingListing }: Props) {
     setMessage("");
 
     try {
+      const cleanedNeighborhood = formData.neighborhood.trim();
+
+      if (cleanedNeighborhood) {
+        await addNeighborhood(cleanedNeighborhood);
+      }
+
       const coverImageUrl = await uploadCoverImage();
 
       const payload = {
@@ -206,7 +214,7 @@ export default function ListingForm({ existingListing }: Props) {
         title: formData.title,
         price: formData.price ? Number(formData.price) : null,
         location: formData.location || null,
-        neighborhood: formData.neighborhood || null,
+        neighborhood: cleanedNeighborhood || null,
         listing_type: formData.type || null,
         furnished: formData.furnished || null,
         earliest_move_in: formData.earliestMoveIn || null,
@@ -401,18 +409,23 @@ export default function ListingForm({ existingListing }: Props) {
           <label className="mb-2 block text-sm font-medium text-slate-700">
             Neighborhood
           </label>
-          <select
+          <input
             name="neighborhood"
+            type="text"
+            list="neighborhood-options"
             value={formData.neighborhood}
             onChange={handleChange}
+            placeholder="Type or choose a neighborhood"
             className={fieldClassName}
-          >
-            <option>Kitsilano</option>
-            <option>Yaletown</option>
-            <option>Olympic Village</option>
-            <option>Fairview</option>
-            <option>West End</option>
-          </select>
+          />
+          <datalist id="neighborhood-options">
+            {neighborhoods.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
+          <p className="mt-2 text-xs text-slate-500">
+            You can type a new neighborhood. It will be saved for future listings.
+          </p>
         </div>
 
         <div>
