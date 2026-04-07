@@ -71,9 +71,9 @@ function buildBody({
 
 I hope you're doing well. My name is ${sender.fullName}, and I am reaching out about ${listingReference}${listing.url ? ` (${listing.url})` : ""}.
 
-I’m very interested in the place${listing.neighborhood ? ` in ${listing.neighborhood}` : ""}${listing.price ? ` listed at $${listing.price.toLocaleString()}` : ""}. It looks like a strong fit, and I would love to learn whether it is still available.
+Me and my partner are very interested in the place. It looks like a strong fit, and I would love to learn whether it is still available.
 
-A bit about us: we are responsible, clean, quiet tenants, and we are serious about finding the right place. We can provide references and any other information you may need.
+A bit about us: we are Masters students at UBC looking for a long term rental. We are very responsible, clean, and quiet tenants, looking for a new place to call home. We can provide references and any other information you may need.
 
 If the listing is still available, I would be happy to arrange a viewing or answer any questions.
 
