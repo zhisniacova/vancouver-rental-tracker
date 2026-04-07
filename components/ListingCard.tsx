@@ -19,6 +19,8 @@ export type Listing = {
   comments: string;
   url: string;
   coverImageUrl?: string | null;
+  sashaScore?: number | null;
+  glebScore?: number | null;
 };
 
 type Props = {
@@ -33,10 +35,21 @@ const STATUS_OPTIONS: Listing["status"][] = [
   "expired",
 ];
 
+function getAverageScore(listing: Listing) {
+  const scores = [listing.sashaScore, listing.glebScore].filter(
+    (score): score is number => score !== null && score !== undefined && score > 0
+  );
+
+  if (scores.length === 0) return null;
+
+  return scores.reduce((sum, score) => sum + score, 0) / scores.length;
+}
+
 export default function ListingCard({ listing }: Props) {
   const router = useRouter();
   const bothLiked =
     listing.likes.includes("Sasha") && listing.likes.includes("Gleb");
+  const averageScore = getAverageScore(listing);
 
   async function handleDelete() {
     const confirmDelete = window.confirm("Delete this listing?");
@@ -132,6 +145,26 @@ export default function ListingCard({ listing }: Props) {
       console.error("Error checking listing:", error);
       alert("Could not check listing status.");
     }
+  }
+
+  async function handleScoreChange(
+    person: "sasha_score" | "gleb_score",
+    value: string
+  ) {
+    const scoreValue = value === "" ? null : Number(value);
+
+    const { error } = await supabase
+      .from("listings")
+      .update({ [person]: scoreValue })
+      .eq("id", listing.id);
+
+    if (error) {
+      console.error("Error updating score:", error);
+      alert(`Error updating score: ${error.message}`);
+      return;
+    }
+
+    router.refresh();
   }
 
   return (
@@ -262,6 +295,40 @@ export default function ListingCard({ listing }: Props) {
             {listing.likes.includes("Gleb") ? "♥ Gleb liked" : "♡ Gleb like"}
           </button>
         </div>
+
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          <select
+            value={listing.sashaScore && listing.sashaScore > 0 ? listing.sashaScore : ""}
+            onChange={(e) => handleScoreChange("sasha_score", e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
+          >
+            <option value="">Sasha score</option>
+            {Array.from({ length: 10 }, (_, i) => i + 1).map((score) => (
+              <option key={score} value={score}>
+                Sasha: {score}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={listing.glebScore && listing.glebScore > 0 ? listing.glebScore : ""}
+            onChange={(e) => handleScoreChange("gleb_score", e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
+          >
+            <option value="">Gleb score</option>
+            {Array.from({ length: 10 }, (_, i) => i + 1).map((score) => (
+              <option key={score} value={score}>
+                Gleb: {score}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {averageScore !== null && (
+          <p className="mb-4 text-sm font-medium text-slate-700">
+            ⭐ Avg score: {averageScore.toFixed(1)}
+          </p>
+        )}
 
         <div className="mb-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
           <p className="mb-1 font-medium text-slate-700">Comments</p>

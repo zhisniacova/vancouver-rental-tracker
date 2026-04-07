@@ -81,6 +81,7 @@ export default function FilterBar({
           <option value="none">Sort</option>
           <option value="low">Price ↑</option>
           <option value="high">Price ↓</option>
+          <option value="score">Top rated ⭐</option>
         </select>
       </div>
     </section>
