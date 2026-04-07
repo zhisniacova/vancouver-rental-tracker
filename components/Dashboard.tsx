@@ -183,10 +183,19 @@ function TopPickCompactCard({ listing }: { listing: Listing }) {
 function NeedsActionCompactCard({
   listing,
   tags,
+  needsActionIds,
+  currentIndex,
 }: {
   listing: Listing;
   tags: ExtendedActionTag[];
+  needsActionIds: string[];
+  currentIndex: number;
 }) {
+  const queueParam = needsActionIds.join(",");
+  const openHref = `/listing/${listing.id}?na_ids=${encodeURIComponent(
+    queueParam
+  )}&na_i=${currentIndex}`;
+
   return (
     <article className="w-72 flex-none overflow-hidden rounded-xl bg-white ring-1 ring-amber-200">
       <div className="relative h-28 bg-slate-200">
@@ -233,7 +242,7 @@ function NeedsActionCompactCard({
 
         <div className="grid grid-cols-2 gap-2">
           <Link
-            href={`/listing/${listing.id}`}
+            href={openHref}
             className="rounded-lg border border-slate-200 px-2 py-1.5 text-center text-xs font-medium text-slate-700 hover:bg-slate-50"
           >
             Open
@@ -344,6 +353,8 @@ export default function Dashboard({ listings }: Props) {
     return a.listing.title.localeCompare(b.listing.title);
   });
 
+  const actionItemIds = actionItems.map((item) => item.listing.id);
+
   return (
     <>
       {(topPicks.length > 0 || actionItems.length > 0) && (
@@ -377,11 +388,13 @@ export default function Dashboard({ listings }: Props) {
               </div>
 
               <section className="flex gap-3 overflow-x-auto pb-2">
-                {actionItems.map(({ listing, tags }) => (
+                {actionItems.map(({ listing, tags }, index) => (
                   <NeedsActionCompactCard
                     key={`action-${listing.id}`}
                     listing={listing}
                     tags={tags}
+                    needsActionIds={actionItemIds}
+                    currentIndex={index}
                   />
                 ))}
               </section>
