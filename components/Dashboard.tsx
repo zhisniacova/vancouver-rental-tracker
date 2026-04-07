@@ -60,14 +60,22 @@ const STATUS_SORT_ORDER_VIEWED_TO_NEW: Record<Listing["status"], number> = {
 };
 
 type ActionTag = "Review" | "Message Soon";
+type ExtendedActionTag = ActionTag | "Duplicate";
 
 function getActionTagsForUser(
   listing: Listing,
-  currentUser: "Sasha" | "Gleb"
-): ActionTag[] {
+  currentUser: "Sasha" | "Gleb",
+  duplicateUrls: Set<string>
+): ExtendedActionTag[] {
   if (listing.status === "expired") return [];
 
-  const tags: ActionTag[] = [];
+  const tags: ExtendedActionTag[] = [];
+  const normalizedUrl = normalizeListingUrl(listing.url);
+
+  if (normalizedUrl && duplicateUrls.has(normalizedUrl)) {
+    tags.push("Duplicate");
+  }
+
   const addedByOtherUser =
     listing.addedBy === "Sasha" || listing.addedBy === "Gleb"
       ? listing.addedBy !== currentUser
@@ -88,6 +96,21 @@ function getActionTagsForUser(
   }
 
   return tags;
+}
+
+function normalizeListingUrl(url?: string | null) {
+  if (!url) return "";
+
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+
+  try {
+    const parsed = new URL(trimmed);
+    const pathname = parsed.pathname.replace(/\/+$/, "");
+    return `${parsed.origin.toLowerCase()}${pathname}${parsed.search}`;
+  } catch {
+    return trimmed.toLowerCase().replace(/\/+$/, "");
+  }
 }
 
 function TopPickCompactCard({ listing }: { listing: Listing }) {
@@ -162,7 +185,7 @@ function NeedsActionCompactCard({
   tags,
 }: {
   listing: Listing;
-  tags: ActionTag[];
+  tags: ExtendedActionTag[];
 }) {
   return (
     <article className="w-72 flex-none overflow-hidden rounded-xl bg-white ring-1 ring-amber-200">
@@ -196,9 +219,11 @@ function NeedsActionCompactCard({
             <span
               key={`${listing.id}-${tag}`}
               className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                tag === "Review"
-                  ? "bg-violet-100 text-violet-700"
-                  : "bg-amber-100 text-amber-700"
+                tag === "Duplicate"
+                  ? "bg-rose-100 text-rose-700"
+                  : tag === "Review"
+                    ? "bg-violet-100 text-violet-700"
+                    : "bg-amber-100 text-amber-700"
               }`}
             >
               {tag}
@@ -272,12 +297,52 @@ export default function Dashboard({ listings }: Props) {
     });
 
   const topPicks = filtered.filter(isTopPick);
+
+  const urlCounts = filtered.reduce<Record<string, number>>((acc, listing) => {
+    const key = normalizeListingUrl(listing.url);
+    if (!key) return acc;
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const duplicateUrls = new Set(
+    Object.keys(urlCounts).filter((url) => urlCounts[url] > 1)
+  );
+
   const actionItems = filtered
-    .map((listing) => ({
-      listing,
-      tags: getActionTagsForUser(listing, currentUser),
-    }))
+    .map((listing) => {
+      const tags = getActionTagsForUser(listing, currentUser, duplicateUrls);
+      const duplicateGroupKey = normalizeListingUrl(listing.url);
+
+      return {
+        listing,
+        tags,
+        isDuplicate: tags.includes("Duplicate"),
+        duplicateGroupKey,
+      };
+    })
     .filter((item) => item.tags.length > 0);
+
+  actionItems.sort((a, b) => {
+    if (a.isDuplicate !== b.isDuplicate) {
+      return a.isDuplicate ? -1 : 1;
+    }
+
+    if (a.isDuplicate && b.isDuplicate) {
+      if (a.duplicateGroupKey !== b.duplicateGroupKey) {
+        return a.duplicateGroupKey.localeCompare(b.duplicateGroupKey);
+      }
+      return a.listing.title.localeCompare(b.listing.title);
+    }
+
+    const aHasReview = a.tags.includes("Review");
+    const bHasReview = b.tags.includes("Review");
+    if (aHasReview !== bHasReview) {
+      return aHasReview ? -1 : 1;
+    }
+
+    return a.listing.title.localeCompare(b.listing.title);
+  });
 
   return (
     <>
