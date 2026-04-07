@@ -335,17 +335,24 @@ export default function ListingCard({ listing }: Props) {
           <p>{listing.comments || "No comments yet."}</p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="grid grid-cols-3 gap-2">
+          <Link
+            href={`/message/${listing.id}`}
+            className="rounded-xl border border-blue-200 bg-blue-50 py-2 text-center text-sm font-medium text-blue-700 hover:bg-blue-100"
+          >
+            Message
+          </Link>
+
           <Link
             href={`/edit/${listing.id}`}
-            className="flex-1 rounded-xl border border-slate-200 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
+            className="rounded-xl border border-slate-200 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
           >
             Edit
           </Link>
 
           <button
             onClick={handleDelete}
-            className="flex-1 rounded-xl bg-red-500 py-2 text-sm font-medium text-white hover:bg-red-600"
+            className="rounded-xl bg-red-500 py-2 text-sm font-medium text-white hover:bg-red-600"
           >
             Delete
           </button>
