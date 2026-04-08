@@ -17,22 +17,39 @@ Apartment hunting is a high-frequency, high-noise problem. This app was designed
 
 ## Key Features
 
-- Listing lifecycle management: create, edit, delete, and status updates (`new`, `messaged`, `viewing_scheduled`, `viewed`, `expired`)
+- Listing lifecycle management: create, edit, delete, and status updates (`New`, `Messaged`, `Viewing Scheduled`, `Viewed`, `Expired`)
 - Smart dashboard UX:
-  - search + multi-filter controls (neighborhood, status, likes, sorting)
-  - "Top Picks" section for mutually liked, high-score listings
-  - "Needs Action" section for listings both users liked but haven’t messaged yet
+  - search + polished multi-select filters for neighborhoods and statuses
+  - sorting by price, score, and status (both `New → Viewed` and `Viewed → New`)
+  - "Showing X of Y listings" live result count
+  - compact horizontal "Top Picks" bar for mutually liked, high-score listings
+  - user-specific "Needs Action" bar with tags:
+    - `Review` (you still need to score the other person’s listing)
+    - `Message Soon` (both liked, not messaged yet)
+    - `Duplicate` (same URL detected across listings)
+- Needs Action workflow navigation:
+  - open a listing from Needs Action and move through the queue using `Next Needs Action →`
 - Dual-user collaboration model (no auth yet):
   - user context switcher (`Sasha` / `Gleb`)
   - persisted local preference via `localStorage`
+- Scoring and likes workflow:
+  - score editing on dashboard cards and in listing details (`Quick scoring` panel)
+  - auto-like when a user score is greater than 5
+  - `NEW` image badge for listings added in last 24h (hidden once both users scored)
 - Messaging workflow:
   - templated Email / Website Message / SMS drafts
-  - one-click Gmail compose deep-link
+  - fully editable message body in-app (`Message Editor`)
+  - auto-CC the other user for email drafts
+  - rich clipboard copy with clickable links when pasted into Gmail
   - message history persisted in `listing_messages`
   - auto-updates `messaged_at`, `messaged_by`, and listing status
+- Message timeline tracking:
+  - append rental replies and follow-ups directly from listing details
+  - reverse-chronological history for faster recent-context access
 - Viewing scheduler page (`/viewings`):
   - grouped by day
   - separated into upcoming vs past sections
+  - timezone-safe Vancouver-time classification for upcoming/past accuracy
 - Data quality + flexibility:
   - dynamic neighborhoods table (read + create)
   - image support via URL and uploaded cover images
@@ -56,7 +73,7 @@ Apartment hunting is a high-frequency, high-noise problem. This app was designed
   - server-rendered routes for dashboard, listing details, editing, messaging, and viewings
   - API route: `app/api/check-listing/route.ts`
 - `components/`
-  - reusable UI and feature components (listing cards/forms, filters, status badges, message composer)
+  - reusable UI and feature components (`ListingCard`, `ListingForm`, `FilterBar`, `MessageComposer`, `MessageHistory`, `ListingScorePanel`, `NeedsActionNavigator`)
 - `lib/`
   - Supabase client utilities
 - Data model (core tables):
@@ -108,7 +125,7 @@ Open `http://localhost:3000`.
 
 - Designed and shipped a full-stack workflow product with real multi-user collaboration constraints.
 - Implemented end-to-end messaging operations with persisted audit trail and state transitions.
-- Built prioritization logic (shared likes + scoring) to convert noisy data into actionable decisions.
+- Built prioritization logic (shared likes + scoring + duplicate detection + action tags) to convert noisy data into actionable decisions.
 - Modeled and integrated normalized relational tables in Supabase to support evolving product features.
 
 ## Next Roadmap
