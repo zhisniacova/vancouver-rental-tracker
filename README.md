@@ -2,102 +2,128 @@
 
 Deployed Site: [rental-search-tracker.vercel.app](https://rental-search-tracker.vercel.app/)
 
-A full-stack web app for managing the rental search process collaboratively.
+A full-stack web application that transforms apartment hunting from a chaotic, fragmented process into a structured, collaborative workflow.
 
-Built for two active users (Sasha and Gleb), this project turns scattered listing links and ad-hoc messages into a structured workflow: discover listings, score and shortlist them, track outreach, and manage viewings in one place.
+Designed for real users actively searching in Vancouver, the app centralizes listings, communication, and decision-making into a single system.
 
-## Why This Project Matters
+## Overview
 
-Apartment hunting is a high-frequency, high-noise problem. This app was designed to reduce decision fatigue and coordination overhead by:
+Rental searching often involves:
 
-- centralizing listing data and communication history
-- making shortlist decisions objective with shared scoring + likes
-- surfacing priority items with action-oriented dashboard sections
-- preserving timeline context (messaged date, viewings, past interactions)
+- dozens of open tabs
+- lost conversations with landlords
+- missed follow-ups
+- unclear prioritization between options
 
-## Key Features
+This application solves that by acting as a workflow management system for apartment hunting, enabling users to track, evaluate, and coordinate listings efficiently.
 
-- Listing lifecycle management: create, edit, delete, and status updates (`New`, `Messaged`, `Viewing Scheduled`, `Viewed`, `Expired`)
-- Smart dashboard UX:
-  - search + polished multi-select filters for neighborhoods and statuses
-  - sorting by price, score, and status (both `New → Viewed` and `Viewed → New`)
-  - "Showing X of Y listings" live result count
-  - compact horizontal "Top Picks" bar for mutually liked, high-score listings
-  - user-specific "Needs Action" bar with tags:
-    - `Review` (you still need to score the other person’s listing)
-    - `Message Soon` (both liked, not messaged yet)
-    - `Duplicate` (same URL detected across listings)
-- Needs Action workflow navigation:
-  - open a listing from Needs Action and move through the queue using `Next Needs Action →`
-- Dual-user collaboration model (no auth yet):
-  - user context switcher (`Sasha` / `Gleb`)
-  - persisted local preference via `localStorage`
-- Scoring and likes workflow:
-  - score editing on dashboard cards and in listing details (`Quick scoring` panel)
-  - auto-like when a user score is greater than 5
-  - `NEW` image badge for listings added in last 24h (hidden once both users scored)
-- Messaging workflow:
-  - templated Email / Website Message / SMS drafts
-  - fully editable message body in-app (`Message Editor`)
-  - auto-CC the other user for email drafts
-  - rich clipboard copy with clickable links when pasted into Gmail
-  - message history persisted in `listing_messages`
-  - auto-updates `messaged_at`, `messaged_by`, and listing status
-- Message timeline tracking:
-  - append rental replies and follow-ups directly from listing details
-  - reverse-chronological history for faster recent-context access
-- Viewing scheduler page (`/viewings`):
-  - grouped by day
-  - separated into upcoming vs past sections
-  - timezone-safe Vancouver-time classification for upcoming/past accuracy
-- Data quality + flexibility:
-  - dynamic neighborhoods table (read + create)
-  - image support via URL and uploaded cover images
-- Listing health check API:
-  - server route fetches original listing URL and flags expired/removed postings
+It is being actively used by multiple users collaborating in real-time during a live apartment search!
+
+## Core Features
+
+### Listing Management
+- Create, edit, and track listings with lifecycle states:
+  - `New -> Messaged -> Viewing Scheduled -> Viewed -> Expired`
+- Image suport (URL + uploaded cover images)
+- Duplicate detection across listings
+
+### Smart Dashboard
+- Multi-select filters (neighborhoods, status)
+- Sorting by price, score, and status
+- Live result counts (“Showing X of Y listings”)
+- **Top Picks** bar for mutually liked listings
+- **Needs Action** panel highlighting:
+  - Listings to review
+  - Listings to message
+  - Duplicates
+
+### Real-Time Collaboration
+- Multi-user system supporting concurrent usage across sessions
+- Changes made by one user (e.g., scoring, messaging, status updates) are **immediately reflected for other users**
+- Shared state across:
+  - listings
+  - scores and likes
+  - messages and communication history
+  - viewing schedules
+- Designed for roommate workflows where multiple users coordinate decisions in parallel
+
+### Scoring & Prioritization
+- Per-user scoring system
+- Auto-like when score > 5
+- "Top Picks" based on shared interest
+- NEW badge for recently added listings
+
+### Messaging system
+- Built-in message composer (Email / SMS / Website)
+- Editable templates with clipboard support
+- Auto-tracking of:
+  - `messaged_at`
+  - `messaged_by`
+  - status updates
+- Message history timeline per listing
+
+### Viewing Scheduler
+- Dedicated `/viewings` page
+- Grouped by date
+- Split into:
+  - Upcoming
+  - Past
+- Timezone-safe handling (Vancouver)
+
+### Action-oriented Workflow
+- “Needs Action” navigation system
+- Step-through flow using Next **Needs Action** →
+- Designed to reduce decision fatigue and missed steps
+
+### Data & System Design
+- Dynamic neighborhoods (user-created options)
+- Listing health check API (detect expired listings)
+- Normalized relational data model:
+  - listings
+  - listing_likes
+  - listing_messages
+  - neighborhoods
 
 ## Tech Stack
 
-- Next.js 16 (App Router, React Server Components + client components where needed)
-- React 19
-- TypeScript
-- Supabase
-  - Postgres (application data)
-  - Storage (listing images)
-- Tailwind CSS 4
-- ESLint 9
+- **Frontend**: Next.js (App Router), React 19, TypeScript
+- **Backend**: Supabase (PostgreSQL + Storage)
+- **Styling**: Tailwind CSS
+- **Tooling**: ESLint
 
-## Architecture Snapshot
+## Architecture
 
-- `app/`
-  - server-rendered routes for dashboard, listing details, editing, messaging, and viewings
-  - API route: `app/api/check-listing/route.ts`
-- `components/`
-  - reusable UI and feature components (`ListingCard`, `ListingForm`, `FilterBar`, `MessageComposer`, `MessageHistory`, `ListingScorePanel`, `NeedsActionNavigator`)
-- `lib/`
-  - Supabase client utilities
-- Data model (core tables):
-  - `listings`
-  - `listing_likes`
-  - `listing_messages`
-  - `neighborhoods`
+```
+app/
+  Dashboard, listing details, messaging, viewings (server-rendered)
 
-## Product Decisions
+components/
+  Reusable UI (ListingCard, FilterBar, MessageComposer, etc.)
 
-- Deliberately postponed auth to optimize for speed of iteration and real usage feedback.
-- Used explicit statuses + timestamps to make workflow state visible at a glance.
-- Split dashboard into “decision support” sections (`Top Picks`, `Needs Action`) instead of only a raw list.
-- Chose server-rendered data reads for simple, reliable freshness in core pages.
+lib/
+  Supabase client + utilities
+
+api/
+  /api/check-listing → validates listing availability
+```
+
+## Key Product Decisions
+- No authentication initially
+  - → prioritized rapid iteration and real usage testing
+- Explicit statuses + timestamps
+  - → ensures workflow state is always visible
+- Action-driven UI (Top Picks + Needs Action)
+  - → reduces cognitive overload vs raw listing lists
+- Server-rendered data fetching
+  - → simple, reliable data consistency
+
 
 ## Local Development
 
-### 1) Install dependencies
 
 ```bash
 npm install
 ```
-
-### 2) Configure environment
 
 Create `.env.local` with:
 
@@ -106,7 +132,7 @@ NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 ```
 
-### 3) Run the app
+Run:
 
 ```bash
 npm run dev
@@ -114,22 +140,16 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-## Scripts
 
-- `npm run dev` - start development server
-- `npm run build` - production build
-- `npm run start` - run production server
-- `npm run lint` - run ESLint
+## Resume Highlights
 
-## Resume-Ready Highlights
+- Designed and built a full-stack workflow application with real multi-user coordination constraints
+- Implemented end-to-end messaging system with persistent state transitions and audit history
+- Developed prioritization logic (scoring, shared likes, action detection) to convert unstructured data into actionable insights
+- Modeled and integrated relational database schema to support evolving product features
 
-- Designed and shipped a full-stack workflow product with real multi-user collaboration constraints.
-- Implemented end-to-end messaging operations with persisted audit trail and state transitions.
-- Built prioritization logic (shared likes + scoring + duplicate detection + action tags) to convert noisy data into actionable decisions.
-- Modeled and integrated normalized relational tables in Supabase to support evolving product features.
 
-## Next Roadmap
-
+## Future Improvements
 - Follow-up reminder automation
-- Multiple images per listing
-- Supabase Auth for true user accounts and permissions
+- Multi-image support per listing
+- User authentication (Supabase Auth)
