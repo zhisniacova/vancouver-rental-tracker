@@ -1,5 +1,7 @@
 # Vancouver Rental Tracker
 
+Deployed Site: [rental-search-tracker.vercel.app](https://rental-search-tracker.vercel.app/)
+
 A full-stack web app for managing the rental search process collaboratively.
 
 Built for two active users (Sasha and Gleb), this project turns scattered listing links and ad-hoc messages into a structured workflow: discover listings, score and shortlist them, track outreach, and manage viewings in one place.
@@ -114,4 +116,3 @@ Open `http://localhost:3000`.
 - Follow-up reminder automation
 - Multiple images per listing
 - Supabase Auth for true user accounts and permissions
-
