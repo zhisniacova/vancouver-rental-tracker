@@ -15,6 +15,8 @@ type ListingStatus =
   | "viewed"
   | "expired";
 
+type AmenityValue = "Unknown" | "Yes" | "No";
+
 type ListingFormData = {
   url: string;
   addedBy: string;
@@ -24,6 +26,10 @@ type ListingFormData = {
   neighborhood: string;
   type: string;
   furnished: string;
+  parking: AmenityValue;
+  storageLocker: AmenityValue;
+  inSuiteWasher: AmenityValue;
+  gym: AmenityValue;
   earliestMoveIn: string;
   sqft: string;
   contactName: string;
@@ -48,6 +54,10 @@ type ExistingListing = {
   neighborhood: string | null;
   listing_type: string | null;
   furnished: string | null;
+  parking: AmenityValue | null;
+  storage_locker: AmenityValue | null;
+  in_suite_washer: AmenityValue | null;
+  gym: AmenityValue | null;
   earliest_move_in: string | null;
   sqft: number | null;
   contact_name: string | null;
@@ -83,6 +93,10 @@ function getInitialFormData(
       neighborhood: "Kitsilano",
       type: "Studio",
       furnished: "No",
+      parking: "Unknown",
+      storageLocker: "Unknown",
+      inSuiteWasher: "Unknown",
+      gym: "Unknown",
       earliestMoveIn: "",
       sqft: "",
       contactName: "",
@@ -107,6 +121,10 @@ function getInitialFormData(
     neighborhood: existingListing.neighborhood || "Kitsilano",
     type: existingListing.listing_type || "Studio",
     furnished: existingListing.furnished || "No",
+    parking: existingListing.parking || "Unknown",
+    storageLocker: existingListing.storage_locker || "Unknown",
+    inSuiteWasher: existingListing.in_suite_washer || "Unknown",
+    gym: existingListing.gym || "Unknown",
     earliestMoveIn: existingListing.earliest_move_in || "",
     sqft: existingListing.sqft?.toString() || "",
     contactName: existingListing.contact_name || "",
@@ -218,6 +236,10 @@ export default function ListingForm({ existingListing }: Props) {
         neighborhood: cleanedNeighborhood || null,
         listing_type: formData.type || null,
         furnished: formData.furnished || null,
+        parking: formData.parking || null,
+        storage_locker: formData.storageLocker || null,
+        in_suite_washer: formData.inSuiteWasher || null,
+        gym: formData.gym || null,
         earliest_move_in: formData.earliestMoveIn || null,
         sqft: formData.sqft ? Number(formData.sqft) : null,
         contact_name: formData.contactName || null,
@@ -263,9 +285,11 @@ export default function ListingForm({ existingListing }: Props) {
 
       router.push("/");
       router.refresh();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       console.error("Error saving listing:", error);
-      setMessage(`Could not save listing: ${error.message}`);
+      setMessage(`Could not save listing: ${errorMessage}`);
       setIsSaving(false);
     }
   }
@@ -458,6 +482,70 @@ export default function ListingForm({ existingListing }: Props) {
             onChange={handleChange}
             className={fieldClassName}
           >
+            <option>Yes</option>
+            <option>No</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-700">
+            Parking
+          </label>
+          <select
+            name="parking"
+            value={formData.parking}
+            onChange={handleChange}
+            className={fieldClassName}
+          >
+            <option>Unknown</option>
+            <option>Yes</option>
+            <option>No</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-700">
+            Storage locker
+          </label>
+          <select
+            name="storageLocker"
+            value={formData.storageLocker}
+            onChange={handleChange}
+            className={fieldClassName}
+          >
+            <option>Unknown</option>
+            <option>Yes</option>
+            <option>No</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-700">
+            In-suite washer
+          </label>
+          <select
+            name="inSuiteWasher"
+            value={formData.inSuiteWasher}
+            onChange={handleChange}
+            className={fieldClassName}
+          >
+            <option>Unknown</option>
+            <option>Yes</option>
+            <option>No</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-700">
+            Gym
+          </label>
+          <select
+            name="gym"
+            value={formData.gym}
+            onChange={handleChange}
+            className={fieldClassName}
+          >
+            <option>Unknown</option>
             <option>Yes</option>
             <option>No</option>
           </select>

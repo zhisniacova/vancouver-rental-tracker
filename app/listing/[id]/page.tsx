@@ -172,6 +172,26 @@ export default async function ListingDetailsPage({ params }: ListingPageProps) {
                   <p className="font-medium text-slate-700">{listing.sqft || "—"}</p>
                 </div>
                 <div>
+                  <p className="text-sm text-slate-400">Parking</p>
+                  <p className="font-medium text-slate-700">{listing.parking || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-400">Storage locker</p>
+                  <p className="font-medium text-slate-700">
+                    {listing.storage_locker || "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-400">In-suite washer</p>
+                  <p className="font-medium text-slate-700">
+                    {listing.in_suite_washer || "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-400">Gym</p>
+                  <p className="font-medium text-slate-700">{listing.gym || "—"}</p>
+                </div>
+                <div>
                   <p className="text-sm text-slate-400">Added by</p>
                   <p className="font-medium text-slate-700">{listing.added_by || "—"}</p>
                 </div>
