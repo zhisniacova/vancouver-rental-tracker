@@ -264,6 +264,13 @@ export default async function ListingDetailsPage({ params }: ListingPageProps) {
 
               <div className="space-y-4">
                 <div>
+                  <p className="mb-1 text-sm text-slate-400">Raw description from site</p>
+                  <p className="whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-slate-700">
+                    {listing.raw_description || "No raw description saved yet."}
+                  </p>
+                </div>
+
+                <div>
                   <p className="mb-1 text-sm text-slate-400">Pros</p>
                   <p className="rounded-xl bg-slate-50 p-3 text-slate-700">
                     {listing.pros || "No pros added yet."}

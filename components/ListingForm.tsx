@@ -41,6 +41,7 @@ type ListingFormData = {
   pros: string;
   cons: string;
   comments: string;
+  rawDescription: string;
   imageUrl: string;
 };
 
@@ -69,6 +70,7 @@ type ExistingListing = {
   pros: string | null;
   cons: string | null;
   comments: string | null;
+  raw_description: string | null;
   cover_image_url?: string | null;
 };
 
@@ -108,6 +110,7 @@ function getInitialFormData(
       pros: "",
       cons: "",
       comments: "",
+      rawDescription: "",
       imageUrl: "",
     };
   }
@@ -138,6 +141,7 @@ function getInitialFormData(
     pros: existingListing.pros || "",
     cons: existingListing.cons || "",
     comments: existingListing.comments || "",
+    rawDescription: existingListing.raw_description || "",
     imageUrl: existingListing.cover_image_url || "",
   };
 }
@@ -252,6 +256,7 @@ export default function ListingForm({ existingListing }: Props) {
         pros: formData.pros || null,
         cons: formData.cons || null,
         comments: formData.comments || null,
+        raw_description: formData.rawDescription || null,
         cover_image_url: coverImageUrl,
       };
 
@@ -665,6 +670,20 @@ export default function ListingForm({ existingListing }: Props) {
             type="datetime-local"
             value={formData.viewingDate}
             onChange={handleChange}
+            className={fieldClassName}
+          />
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="mb-2 block text-sm font-medium text-slate-700">
+            Raw description from site
+          </label>
+          <textarea
+            name="rawDescription"
+            rows={6}
+            value={formData.rawDescription}
+            onChange={handleChange}
+            placeholder="Paste the original listing description here..."
             className={fieldClassName}
           />
         </div>
