@@ -17,6 +17,28 @@ type ListingStatus =
 
 type AmenityValue = "Unknown" | "Yes" | "No";
 
+type AutofillListingResponse = Partial<{
+  title: string;
+  price: string;
+  location: string;
+  neighborhood: string;
+  type: string;
+  furnished: string;
+  parking: AmenityValue;
+  storageLocker: AmenityValue;
+  inSuiteWasher: AmenityValue;
+  gym: AmenityValue;
+  earliestMoveIn: string;
+  sqft: string;
+  rawDescription: string;
+  imageUrl: string;
+  status: ListingStatus;
+  viewingDate: string;
+  contactName: string;
+  aiEnhanced: boolean;
+  warnings: string[];
+}>;
+
 type ListingFormData = {
   url: string;
   addedBy: string;
@@ -94,7 +116,7 @@ function getInitialFormData(
       location: "",
       neighborhood: "Kitsilano",
       type: "Studio",
-      furnished: "No",
+      furnished: "Unknown",
       parking: "Unknown",
       storageLocker: "Unknown",
       inSuiteWasher: "Unknown",
@@ -156,6 +178,7 @@ export default function ListingForm({ existingListing }: Props) {
   );
   const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAutofilling, setIsAutofilling] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -189,6 +212,83 @@ export default function ListingForm({ existingListing }: Props) {
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
     setCoverImageFile(file);
+  }
+
+  function mergeAutofillData(data: AutofillListingResponse) {
+    setFormData((current) => ({
+      ...current,
+      title: data.title?.trim() || current.title,
+      price: data.price?.trim() || current.price,
+      location: data.location?.trim() || current.location,
+      neighborhood: data.neighborhood?.trim() || current.neighborhood,
+      type: data.type?.trim() || current.type,
+      furnished: data.furnished?.trim() || current.furnished,
+      parking: data.parking || current.parking,
+      storageLocker: data.storageLocker || current.storageLocker,
+      inSuiteWasher: data.inSuiteWasher || current.inSuiteWasher,
+      gym: data.gym || current.gym,
+      earliestMoveIn: data.earliestMoveIn?.trim() || current.earliestMoveIn,
+      sqft: data.sqft?.trim() || current.sqft,
+      rawDescription: data.rawDescription?.trim() || current.rawDescription,
+      imageUrl: data.imageUrl?.trim() || current.imageUrl,
+      status: data.status || current.status,
+      viewingDate: data.viewingDate?.trim() || current.viewingDate,
+      contactName: data.contactName?.trim() || current.contactName,
+    }));
+
+    if (data.imageUrl) {
+      setCoverImageFile(null);
+    }
+  }
+
+  async function handleAutofill() {
+    const url = formData.url.trim();
+
+    if (!url) {
+      setMessage("Paste a listing URL first.");
+      return;
+    }
+
+    setIsAutofilling(true);
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/autofill-listing", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url }),
+      });
+
+      const data = (await response.json()) as
+        | AutofillListingResponse
+        | { error?: string };
+
+      if (!response.ok) {
+        throw new Error("error" in data ? data.error : "Autofill failed");
+      }
+
+      mergeAutofillData(data as AutofillListingResponse);
+
+      const warnings =
+        "warnings" in data && Array.isArray(data.warnings)
+          ? data.warnings
+          : [];
+
+      setMessage(
+        warnings.length
+          ? `Autofilled with notes: ${warnings.join(" ")}`
+          : "Autofilled listing details. Review before saving."
+      );
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error("Error autofilling listing:", error);
+      setMessage(`Could not autofill listing: ${errorMessage}`);
+    } finally {
+      setIsAutofilling(false);
+    }
   }
 
   async function uploadCoverImage(): Promise<string | null> {
@@ -309,15 +409,25 @@ export default function ListingForm({ existingListing }: Props) {
           <label className="mb-2 block text-sm font-medium text-slate-700">
             Listing URL
           </label>
-          <input
-            name="url"
-            type="url"
-            value={formData.url}
-            onChange={handleChange}
-            placeholder="Paste the listing URL"
-            className={fieldClassName}
-            required
-          />
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <input
+              name="url"
+              type="url"
+              value={formData.url}
+              onChange={handleChange}
+              placeholder="Paste the listing URL"
+              className={fieldClassName}
+              required
+            />
+            <button
+              type="button"
+              onClick={handleAutofill}
+              disabled={isAutofilling || !formData.url.trim()}
+              className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-40"
+            >
+              {isAutofilling ? "Autofilling..." : "Autofill"}
+            </button>
+          </div>
         </div>
 
         <div className="md:col-span-2 grid gap-5 md:grid-cols-2">
@@ -487,6 +597,7 @@ export default function ListingForm({ existingListing }: Props) {
             onChange={handleChange}
             className={fieldClassName}
           >
+            <option>Unknown</option>
             <option>Yes</option>
             <option>No</option>
           </select>
