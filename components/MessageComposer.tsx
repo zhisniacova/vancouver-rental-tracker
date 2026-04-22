@@ -76,7 +76,7 @@ My partner and I are very interested in the place. It looks like a strong fit, a
 
 A bit about us: we are Masters students at UBC looking for a long term rental. We are very responsible, clean, and quiet tenants, looking for a new place to call home. An ideal move in date for us would be anywhere between June 1st and June 15th. We can provide references and any other information you may need.
 
-If the listing is still available, I would be happy to arrange a viewing or answer any questions. This week would be great if you're available!
+If the listing is still available, I would be happy to arrange a viewing or answer any questions. Next week would be great if you're available!
 
 Thank you very much, and I look forward to hearing from you.
 
