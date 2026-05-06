@@ -1,4 +1,5 @@
 import Link from "next/link";
+import SignOutButton from "./SignOutButton";
 import UserSwitcher from "./UserSwitcher";
 
 type Props = {
@@ -30,6 +31,9 @@ export default function AppHeader({ currentPath = "/" }: Props) {
           <Link href="/viewings" className={navItemClass("/viewings")}>
             Viewings
           </Link>
+          <Link href="/settings" className={navItemClass("/settings")}>
+            Settings
+          </Link>
         </nav>
 
         <UserSwitcher />
@@ -40,6 +44,8 @@ export default function AppHeader({ currentPath = "/" }: Props) {
         >
           + Add listing
         </Link>
+
+        <SignOutButton />
       </div>
     </header>
   );

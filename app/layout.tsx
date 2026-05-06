@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import AuthSessionBridge from "@/components/AuthSessionBridge";
 import { CurrentUserProvider } from "@/components/CurrentUserProvider";
 
 export const metadata: Metadata = {
@@ -15,7 +16,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <CurrentUserProvider>{children}</CurrentUserProvider>
+        <CurrentUserProvider>
+          <AuthSessionBridge />
+          {children}
+        </CurrentUserProvider>
       </body>
     </html>
   );
