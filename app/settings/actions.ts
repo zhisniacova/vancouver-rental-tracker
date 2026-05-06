@@ -1,11 +1,17 @@
 "use server";
 
+import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedSupabaseClient } from "@/lib/auth";
 
 export type SettingsFormState = {
   error?: string;
   message?: string;
+};
+
+export type InviteLinkResult = {
+  error?: string;
+  inviteLink?: string;
 };
 
 function getOptionalString(formData: FormData, key: string) {
@@ -42,4 +48,43 @@ export async function updateProfile(
 
   revalidatePath("/settings");
   return { message: "Settings saved." };
+}
+
+export async function createInviteLink(
+  rentalSearchId: string
+): Promise<InviteLinkResult> {
+  const { supabase, user } = await getAuthenticatedSupabaseClient();
+
+  const { data: membership, error: membershipError } = await supabase
+    .from("search_members")
+    .select("role")
+    .eq("rental_search_id", rentalSearchId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (membershipError) {
+    return { error: membershipError.message };
+  }
+
+  if (membership?.role !== "owner") {
+    return { error: "Only workspace owners can create invite links." };
+  }
+
+  const token = crypto.randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString();
+
+  const { error } = await supabase.from("search_invites").insert([
+    {
+      rental_search_id: rentalSearchId,
+      token,
+      created_by: user.id,
+      expires_at: expiresAt,
+    },
+  ]);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { inviteLink: `/join?token=${encodeURIComponent(token)}` };
 }

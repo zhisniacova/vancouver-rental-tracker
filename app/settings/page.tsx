@@ -1,4 +1,5 @@
 import AppHeader from "@/components/AppHeader";
+import InviteCollaborator from "@/components/InviteCollaborator";
 import SettingsForm from "@/components/SettingsForm";
 import { getAuthenticatedSupabaseClient } from "@/lib/auth";
 
@@ -28,7 +29,10 @@ export default async function SettingsPage() {
     <main className="min-h-screen bg-slate-50 px-6 py-8">
       <div className="mx-auto max-w-3xl">
         <AppHeader currentPath="/settings" />
-        <SettingsForm profile={profile} email={user.email ?? ""} />
+        <div className="space-y-6">
+          <SettingsForm profile={profile} email={user.email ?? ""} />
+          <InviteCollaborator />
+        </div>
       </div>
     </main>
   );

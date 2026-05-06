@@ -6,7 +6,14 @@ import {
   setAuthCookies,
 } from "@/lib/auth";
 
-const PUBLIC_ROUTES = new Set(["/login", "/signup"]);
+const PUBLIC_ROUTES = new Set(["/login", "/signup", "/join"]);
+const AUTH_ROUTES = new Set(["/login", "/signup"]);
+
+function getSafeRedirect(path: string | null) {
+  if (!path || !path.startsWith("/") || path.startsWith("//")) return "/";
+  if (path.startsWith("/login") || path.startsWith("/signup")) return "/";
+  return path;
+}
 
 function createProxySupabaseClient(accessToken?: string) {
   return createClient(
@@ -74,8 +81,10 @@ export async function proxy(request: NextRequest) {
     return redirectToLogin(request);
   }
 
-  if (isAuthenticated && isPublicRoute) {
-    return NextResponse.redirect(new URL("/", request.url));
+  if (isAuthenticated && AUTH_ROUTES.has(pathname)) {
+    return NextResponse.redirect(
+      new URL(getSafeRedirect(request.nextUrl.searchParams.get("next")), request.url)
+    );
   }
 
   return response;

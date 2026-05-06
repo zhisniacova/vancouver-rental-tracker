@@ -18,6 +18,13 @@ function getSafeRedirect(path?: string) {
   return path;
 }
 
+function authLink(path: "/login" | "/signup", redirectTo?: string) {
+  const safeRedirect = getSafeRedirect(redirectTo);
+  return safeRedirect === "/"
+    ? path
+    : `${path}?next=${encodeURIComponent(safeRedirect)}`;
+}
+
 export default function AuthForm({ mode, redirectTo }: Props) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -82,7 +89,9 @@ export default function AuthForm({ mode, redirectTo }: Props) {
       return;
     }
 
-    router.push(isSignup ? "/settings" : getSafeRedirect(redirectTo));
+    router.push(
+      isSignup && !redirectTo ? "/settings" : getSafeRedirect(redirectTo)
+    );
     router.refresh();
   }
 
@@ -200,7 +209,7 @@ export default function AuthForm({ mode, redirectTo }: Props) {
       <p className="mt-4 text-center text-sm text-slate-500">
         {isSignup ? "Already have an account?" : "Need an account?"}{" "}
         <Link
-          href={isSignup ? "/login" : "/signup"}
+          href={isSignup ? authLink("/login", redirectTo) : authLink("/signup", redirectTo)}
           className="font-medium text-slate-900 underline underline-offset-2"
         >
           {isSignup ? "Log in" : "Sign up"}
