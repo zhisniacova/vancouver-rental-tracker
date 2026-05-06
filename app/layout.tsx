@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import AuthSessionBridge from "@/components/AuthSessionBridge";
 import { CurrentUserProvider } from "@/components/CurrentUserProvider";
+import { WorkspaceProvider } from "@/components/WorkspaceProvider";
 
 export const metadata: Metadata = {
   title: "Rental Tracker",
@@ -17,8 +18,10 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <CurrentUserProvider>
-          <AuthSessionBridge />
-          {children}
+          <WorkspaceProvider>
+            <AuthSessionBridge />
+            {children}
+          </WorkspaceProvider>
         </CurrentUserProvider>
       </body>
     </html>

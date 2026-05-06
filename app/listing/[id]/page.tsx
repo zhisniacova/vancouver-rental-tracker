@@ -1,20 +1,16 @@
 import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
 import StatusBadge from "@/components/StatusBadge";
 import MessageHistory from "@/components/MessageHistory";
 import ListingScorePanel from "@/components/ListingScorePanel";
 import NeedsActionNavigator from "@/components/NeedsActionNavigator";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { getAuthenticatedSupabaseClient } from "@/lib/auth";
 
 type ListingPageProps = {
   params: Promise<{ id: string }>;
 };
 
 async function getListingDetails(id: string) {
+  const { supabase } = await getAuthenticatedSupabaseClient();
   const { data: listing, error: listingError } = await supabase
     .from("listings")
     .select("*")

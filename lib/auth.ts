@@ -97,13 +97,33 @@ export async function requireUser() {
   return user;
 }
 
-export async function getAuthenticatedSupabaseClient() {
+export async function getAuthenticatedSupabaseClientOrNull() {
   const cookieStore = await cookies();
   const accessToken = cookieStore.get(AUTH_ACCESS_COOKIE)?.value;
-  const user = await requireUser();
+
+  if (!accessToken) {
+    return null;
+  }
+
+  const supabase = createSupabaseServerClient(accessToken);
+  const { data, error } = await supabase.auth.getUser(accessToken);
+
+  if (error || !data.user) {
+    return null;
+  }
 
   return {
-    supabase: createSupabaseServerClient(accessToken),
-    user,
+    supabase,
+    user: data.user,
   };
+}
+
+export async function getAuthenticatedSupabaseClient() {
+  const auth = await getAuthenticatedSupabaseClientOrNull();
+
+  if (!auth) {
+    redirect("/login");
+  }
+
+  return auth;
 }

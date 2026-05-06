@@ -24,6 +24,7 @@ export type Listing = {
   createdAt?: string | null;
   sashaScore?: number | null;
   glebScore?: number | null;
+  rentalSearchId?: string | null;
 };
 
 type Props = {

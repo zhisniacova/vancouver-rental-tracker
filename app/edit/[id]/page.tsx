@@ -1,12 +1,8 @@
 import ListingForm from "@/components/ListingForm";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { getAuthenticatedSupabaseClient } from "@/lib/auth";
 
 async function getListing(id: string) {
+  const { supabase } = await getAuthenticatedSupabaseClient();
   const { data, error } = await supabase
     .from("listings")
     .select("*")

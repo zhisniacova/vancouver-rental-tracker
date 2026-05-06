@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "./CurrentUserProvider";
 import { formatStatusLabel } from "./StatusBadge";
 import { useNeighborhoodOptions } from "./useNeighborhoodOptions";
+import { useWorkspace } from "./WorkspaceProvider";
 
 type ListingStatus =
   | "new"
@@ -94,6 +95,7 @@ type ExistingListing = {
   comments: string | null;
   raw_description: string | null;
   cover_image_url?: string | null;
+  rental_search_id?: string | null;
 };
 
 type Props = {
@@ -171,6 +173,8 @@ function getInitialFormData(
 export default function ListingForm({ existingListing }: Props) {
   const router = useRouter();
   const { currentUser } = useCurrentUser();
+  const { currentRentalSearchId, currentWorkspace, isLoadingWorkspaces } =
+    useWorkspace();
   const { neighborhoods, addNeighborhood } = useNeighborhoodOptions();
 
   const [formData, setFormData] = useState<ListingFormData>(
@@ -323,6 +327,12 @@ export default function ListingForm({ existingListing }: Props) {
     setMessage("");
 
     try {
+      if (!existingListing && !currentRentalSearchId) {
+        setMessage("Choose a workspace before saving a new listing.");
+        setIsSaving(false);
+        return;
+      }
+
       const cleanedNeighborhood = formData.neighborhood.trim();
 
       if (cleanedNeighborhood) {
@@ -358,6 +368,9 @@ export default function ListingForm({ existingListing }: Props) {
         comments: formData.comments || null,
         raw_description: formData.rawDescription || null,
         cover_image_url: coverImageUrl,
+        rental_search_id: existingListing
+          ? existingListing.rental_search_id ?? null
+          : currentRentalSearchId,
       };
 
       if (existingListing) {
@@ -405,6 +418,17 @@ export default function ListingForm({ existingListing }: Props) {
       className="space-y-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200"
     >
       <div className="grid gap-5 md:grid-cols-2">
+        {!existingListing && (
+          <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Workspace:{" "}
+            <span className="font-medium text-slate-900">
+              {isLoadingWorkspaces
+                ? "Loading..."
+                : currentWorkspace?.name ?? "No workspace selected"}
+            </span>
+          </div>
+        )}
+
         <div className="md:col-span-2">
           <label className="mb-2 block text-sm font-medium text-slate-700">
             Listing URL

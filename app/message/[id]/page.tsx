@@ -1,16 +1,12 @@
 import MessageComposer from "@/components/MessageComposer";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { getAuthenticatedSupabaseClient } from "@/lib/auth";
 
 type MessagePageProps = {
   params: Promise<{ id: string }>;
 };
 
 async function getListing(id: string) {
+  const { supabase } = await getAuthenticatedSupabaseClient();
   const { data, error } = await supabase
     .from("listings")
     .select("*")

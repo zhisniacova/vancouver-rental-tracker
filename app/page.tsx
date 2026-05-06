@@ -1,16 +1,12 @@
 import Dashboard from "@/components/Dashboard";
 import { Listing } from "@/components/ListingCard";
 import AppHeader from "@/components/AppHeader";
-import { createClient } from "@supabase/supabase-js";
+import { getAuthenticatedSupabaseClient } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
 async function getListings(): Promise<Listing[]> {
+  const { supabase } = await getAuthenticatedSupabaseClient();
   const { data: listings, error: listingsError } = await supabase
     .from("listings")
     .select("*")
@@ -49,6 +45,7 @@ async function getListings(): Promise<Listing[]> {
     createdAt: item.created_at ?? null,
     sashaScore: item.sasha_score ?? 0,
     glebScore: item.gleb_score ?? 0,
+    rentalSearchId: item.rental_search_id ?? null,
   }));
 }
 

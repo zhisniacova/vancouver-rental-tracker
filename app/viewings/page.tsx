@@ -1,14 +1,9 @@
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import StatusBadge from "@/components/StatusBadge";
-import { createClient } from "@supabase/supabase-js";
+import { getAuthenticatedSupabaseClient } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 type ViewingListing = {
   id: string;
@@ -22,6 +17,7 @@ type ViewingListing = {
 const APP_TIME_ZONE = "America/Vancouver";
 
 async function getViewings(): Promise<ViewingListing[]> {
+  const { supabase } = await getAuthenticatedSupabaseClient();
   const { data, error } = await supabase
     .from("listings")
     .select("id, title, neighborhood, viewing_date, status, cover_image_url")

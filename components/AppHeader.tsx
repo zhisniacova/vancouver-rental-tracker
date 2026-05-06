@@ -1,6 +1,7 @@
 import Link from "next/link";
 import SignOutButton from "./SignOutButton";
 import UserSwitcher from "./UserSwitcher";
+import WorkspaceSwitcher from "./WorkspaceSwitcher";
 
 type Props = {
   currentPath?: string;
@@ -35,6 +36,8 @@ export default function AppHeader({ currentPath = "/" }: Props) {
             Settings
           </Link>
         </nav>
+
+        <WorkspaceSwitcher />
 
         <UserSwitcher />
 

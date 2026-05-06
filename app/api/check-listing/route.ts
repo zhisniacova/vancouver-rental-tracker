@@ -1,9 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { getAuthenticatedSupabaseClientOrNull } from "@/lib/auth";
 
 type CheckListingRequest = {
   listingId: string;
@@ -25,6 +20,12 @@ function looksExpired(html: string) {
 
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthenticatedSupabaseClientOrNull();
+
+    if (!auth) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = (await request.json()) as CheckListingRequest;
     const { listingId, url } = body;
 
@@ -61,14 +62,14 @@ export async function POST(request: Request) {
           reason = "matched expired-page content";
         }
       }
-    } catch (fetchError) {
+    } catch {
       expired = true;
       reason = "request failed";
     }
 
     const newStatus = expired ? "expired" : "new";
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await auth.supabase
       .from("listings")
       .update({ status: newStatus })
       .eq("id", listingId);
@@ -86,9 +87,10 @@ export async function POST(request: Request) {
       status: newStatus,
       reason,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
     return Response.json(
-      { error: error.message ?? "Unknown error" },
+      { error: message },
       { status: 500 }
     );
   }

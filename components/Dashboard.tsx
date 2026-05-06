@@ -6,6 +6,7 @@ import ListingCard, { Listing } from "./ListingCard";
 import FilterBar from "./FilterBar";
 import StatusBadge from "./StatusBadge";
 import { useCurrentUser } from "./CurrentUserProvider";
+import { useWorkspace } from "./WorkspaceProvider";
 
 type Props = {
   listings: Listing[];
@@ -261,13 +262,20 @@ function NeedsActionCompactCard({
 
 export default function Dashboard({ listings }: Props) {
   const { currentUser } = useCurrentUser();
+  const { currentRentalSearchId } = useWorkspace();
   const [search, setSearch] = useState("");
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [sort, setSort] = useState("none");
   const [likeFilter, setLikeFilter] = useState("all");
 
-  const filtered = listings
+  const workspaceListings = currentRentalSearchId
+    ? listings.filter(
+        (listing) => listing.rentalSearchId === currentRentalSearchId
+      )
+    : listings;
+
+  const filtered = workspaceListings
     .filter((listing) => {
       const query = search.toLowerCase();
       return (
@@ -417,7 +425,7 @@ export default function Dashboard({ listings }: Props) {
       />
 
       <p className="mb-4 text-sm text-slate-500">
-        Showing {filtered.length} of {listings.length} listings
+        Showing {filtered.length} of {workspaceListings.length} listings
       </p>
 
       {filtered.length === 0 ? (
