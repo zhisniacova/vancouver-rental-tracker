@@ -313,7 +313,7 @@ function rememberDashboardScroll() {
 
 export default function Dashboard({ listings, initialFilters }: Props) {
   const { currentUser } = useCurrentUser();
-  const { currentRentalSearchId } = useWorkspace();
+  const { currentRentalSearchId, currentWorkspace } = useWorkspace();
   const [search, setSearch] = useState(initialFilters.search);
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>(
     initialFilters.selectedNeighborhoods
@@ -524,6 +524,7 @@ export default function Dashboard({ listings, initialFilters }: Props) {
             <ListingCard
               key={listing.id}
               listing={listing}
+              preferences={currentWorkspace?.criteriaPreferences}
               detailHref={getDetailHref(listing.id, filteredIds.indexOf(listing.id))}
               onOpenDetails={rememberDashboardScroll}
             />

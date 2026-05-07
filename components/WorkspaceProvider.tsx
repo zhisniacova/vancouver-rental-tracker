@@ -9,10 +9,15 @@ import {
   useState,
 } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  normalizeRentalPreferences,
+  type RentalCriteriaPreferences,
+} from "@/lib/rentalPreferences";
 
 export type RentalSearchWorkspace = {
   id: string;
   name: string;
+  criteriaPreferences: RentalCriteriaPreferences;
 };
 
 type WorkspaceContextType = {
@@ -40,7 +45,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   async function refreshWorkspaces() {
     const { data, error } = await supabase
       .from("rental_searches")
-      .select("id, name")
+      .select("id, name, criteria_preferences")
       .order("created_at", { ascending: true });
 
     if (error) {
@@ -51,7 +56,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const nextWorkspaces = (data ?? []) as RentalSearchWorkspace[];
+    const nextWorkspaces = (data ?? []).map((workspace) => ({
+      id: workspace.id,
+      name: workspace.name,
+      criteriaPreferences: normalizeRentalPreferences(
+        workspace.criteria_preferences
+      ),
+    }));
     const savedId =
       typeof window !== "undefined"
         ? localStorage.getItem(CURRENT_WORKSPACE_STORAGE_KEY)

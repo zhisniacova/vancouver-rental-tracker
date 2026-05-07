@@ -3,7 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import StatusBadge from "./StatusBadge";
+import {
+  getBudgetStatus,
+  getCriteriaMatchSummary,
+  getPricePerSqft,
+  getSqftStatus,
+  type RentalCriteriaPreferences,
+} from "@/lib/rentalPreferences";
 import { formatStatusLabel } from "./StatusBadge";
 import { useCurrentUser } from "./CurrentUserProvider";
 
@@ -14,7 +20,7 @@ export type Listing = {
   neighborhood: string;
   location: string;
   type: string;
-  furnished: boolean;
+  furnished: string;
   moveInDate: string;
   addedBy: string;
   status: "new" | "messaged" | "viewing_scheduled" | "viewed" | "expired";
@@ -25,6 +31,12 @@ export type Listing = {
   contactName: string;
   contactEmail: string;
   url: string;
+  sqft?: number | null;
+  parking?: string | null;
+  storageLocker?: string | null;
+  gym?: string | null;
+  inSuiteWasher?: string | null;
+  petPolicy?: string | null;
   coverImageUrl?: string | null;
   createdAt?: string | null;
   sashaScore?: number | null;
@@ -34,6 +46,7 @@ export type Listing = {
 
 type Props = {
   listing: Listing;
+  preferences?: RentalCriteriaPreferences;
   detailHref?: string;
   onOpenDetails?: () => void;
 };
@@ -71,12 +84,65 @@ function hasBothScores(listing: Listing) {
   );
 }
 
-export default function ListingCard({ listing, detailHref, onOpenDetails }: Props) {
+function getBudgetStyles(status: ReturnType<typeof getBudgetStatus>) {
+  if (status === "under") return "bg-emerald-50 text-emerald-700";
+  if (status === "near") return "bg-amber-50 text-amber-700";
+  if (status === "over") return "bg-rose-50 text-rose-700";
+  return "bg-slate-100 text-slate-500";
+}
+
+function getBudgetLabel(status: ReturnType<typeof getBudgetStatus>) {
+  if (status === "under") return "Under budget";
+  if (status === "near") return "Near budget";
+  if (status === "over") return "Over budget";
+  return "Budget unset";
+}
+
+function getSqftStyles(status: ReturnType<typeof getSqftStatus>) {
+  if (status === "meets-target") return "bg-emerald-50 text-emerald-700";
+  if (status === "below-target") return "bg-amber-50 text-amber-700";
+  if (status === "below-minimum") return "bg-rose-50 text-rose-700";
+  return "bg-slate-100 text-slate-500";
+}
+
+function getSqftLabel(status: ReturnType<typeof getSqftStatus>) {
+  if (status === "meets-target") return "Meets sqft target";
+  if (status === "below-target") return "Below target sqft";
+  if (status === "below-minimum") return "Below minimum sqft";
+  return "Sqft target unset";
+}
+
+export default function ListingCard({
+  listing,
+  preferences,
+  detailHref,
+  onOpenDetails,
+}: Props) {
   const router = useRouter();
   const { currentUser } = useCurrentUser();
   const averageScore = getAverageScore(listing);
   const recentlyAdded = isRecentlyAdded(listing.createdAt) && !hasBothScores(listing);
   const resolvedDetailHref = detailHref ?? `/listing/${listing.id}`;
+  const matchSummary = preferences
+    ? getCriteriaMatchSummary(preferences, {
+        parking: listing.parking,
+        storageLocker: listing.storageLocker,
+        gym: listing.gym,
+        inSuiteWasher: listing.inSuiteWasher,
+        petPolicy: listing.petPolicy,
+        furnished: listing.furnished,
+      })
+    : null;
+  const pricePerSqft = getPricePerSqft(listing.price, listing.sqft);
+  const budgetStatus = preferences
+    ? getBudgetStatus(listing.price, preferences)
+    : "unset";
+  const sqftStatus = preferences
+    ? getSqftStatus(listing.sqft, preferences)
+    : "unset";
+  const visibleSignals = matchSummary?.signals.filter(
+    (signal) => signal.points > 0
+  );
 
   async function handleDelete() {
     const confirmDelete = window.confirm("Delete this listing?");
@@ -201,19 +267,13 @@ export default function ListingCard({ listing, detailHref, onOpenDetails }: Prop
             <p className="truncate text-sm text-slate-500">{listing.neighborhood}</p>
           </div>
 
-          <StatusBadge status={listing.status} />
-        </div>
-
-        <div className="mb-4">
-          <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-slate-400">
-            Status
-          </label>
           <select
             value={listing.status}
+            aria-label="Listing status"
             onChange={(e) =>
               handleStatusChange(e.target.value as Listing["status"])
             }
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
+            className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 outline-none focus:border-slate-400"
           >
             {STATUS_OPTIONS.map((status) => (
               <option key={status} value={status}>
@@ -223,9 +283,77 @@ export default function ListingCard({ listing, detailHref, onOpenDetails }: Prop
           </select>
         </div>
 
-        <p className="mb-4 text-2xl font-bold text-slate-900">
-          ${listing.price.toLocaleString()}
-        </p>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-2xl font-bold text-slate-900">
+              ${listing.price.toLocaleString()}
+            </p>
+            {pricePerSqft !== null && (
+              <p className="text-xs font-medium text-slate-500">
+                ${pricePerSqft.toFixed(2)}/sqft
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${getBudgetStyles(
+                budgetStatus
+              )}`}
+            >
+              {getBudgetLabel(budgetStatus)}
+            </span>
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${getSqftStyles(
+                sqftStatus
+              )}`}
+            >
+              {getSqftLabel(sqftStatus)}
+            </span>
+          </div>
+        </div>
+
+        {matchSummary && (
+          <div className="mb-4 rounded-xl bg-slate-50 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-slate-700">
+                Criteria match
+              </p>
+              <p className="text-sm font-semibold text-slate-900">
+                {matchSummary.percentage === null
+                  ? "No weighted criteria"
+                  : `${matchSummary.percentage}%`}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {visibleSignals?.map((signal) => (
+                <span
+                  key={signal.key}
+                  title={`${signal.label}: ${signal.summary}`}
+                  className={`rounded-full px-2 py-1 text-[11px] font-medium ${
+                    signal.matched
+                      ? "bg-emerald-100 text-emerald-700"
+                      : signal.importance === "must-have"
+                        ? "bg-rose-100 text-rose-700"
+                        : signal.known
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {signal.matched ? "OK" : signal.known ? "Missing" : "?"}{" "}
+                  {signal.label}
+                </span>
+              ))}
+            </div>
+            {matchSummary.missingMustHaves.length > 0 && (
+              <p className="mt-2 text-xs font-medium text-rose-700">
+                Missing must-have:{" "}
+                {matchSummary.missingMustHaves
+                  .map((signal) => signal.label)
+                  .join(", ")}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="mb-4 grid grid-cols-2 gap-3 text-sm text-slate-600">
           <div>
@@ -234,7 +362,7 @@ export default function ListingCard({ listing, detailHref, onOpenDetails }: Prop
           </div>
           <div>
             <p className="text-slate-400">Furnished</p>
-            <p className="font-medium text-slate-700">{listing.furnished ? "Yes" : "No"}</p>
+            <p className="font-medium text-slate-700">{listing.furnished || "—"}</p>
           </div>
           <div>
             <p className="text-slate-400">Move-in</p>

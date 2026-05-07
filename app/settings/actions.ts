@@ -3,6 +3,15 @@
 import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedSupabaseClient } from "@/lib/auth";
+import {
+  CRITERIA_LABELS,
+  DEFAULT_RENTAL_PREFERENCES,
+  IMPORTANCE_LEVELS,
+  parseOptionalPositiveNumber,
+  type CriteriaKey,
+  type ImportanceLevel,
+  type RentalCriteriaPreferences,
+} from "@/lib/rentalPreferences";
 
 export type SettingsFormState = {
   error?: string;
@@ -12,6 +21,11 @@ export type SettingsFormState = {
 export type InviteLinkResult = {
   error?: string;
   inviteLink?: string;
+};
+
+export type RentalPreferencesFormState = {
+  error?: string;
+  message?: string;
 };
 
 function getOptionalString(formData: FormData, key: string) {
@@ -87,4 +101,52 @@ export async function createInviteLink(
   }
 
   return { inviteLink: `/join?token=${encodeURIComponent(token)}` };
+}
+
+function getImportance(formData: FormData, key: CriteriaKey): ImportanceLevel {
+  const value = formData.get(`criteria_${key}`);
+
+  return typeof value === "string" &&
+    IMPORTANCE_LEVELS.includes(value as ImportanceLevel)
+    ? (value as ImportanceLevel)
+    : DEFAULT_RENTAL_PREFERENCES.criteria[key];
+}
+
+export async function updateRentalPreferences(
+  _prevState: RentalPreferencesFormState,
+  formData: FormData
+): Promise<RentalPreferencesFormState> {
+  const { supabase } = await getAuthenticatedSupabaseClient();
+  const rentalSearchId = getOptionalString(formData, "rentalSearchId");
+
+  if (!rentalSearchId) {
+    return { error: "Choose a workspace before saving rental preferences." };
+  }
+
+  const criteriaKeys = Object.keys(CRITERIA_LABELS) as CriteriaKey[];
+  const preferences: RentalCriteriaPreferences = {
+    criteria: criteriaKeys.reduce(
+      (acc, key) => ({
+        ...acc,
+        [key]: getImportance(formData, key),
+      }),
+      {} as RentalCriteriaPreferences["criteria"]
+    ),
+    maxRent: parseOptionalPositiveNumber(formData.get("maxRent")),
+    targetSqft: parseOptionalPositiveNumber(formData.get("targetSqft")),
+    minimumSqft: parseOptionalPositiveNumber(formData.get("minimumSqft")),
+  };
+
+  const { error } = await supabase
+    .from("rental_searches")
+    .update({ criteria_preferences: preferences })
+    .eq("id", rentalSearchId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/settings");
+  return { message: "Rental preferences saved." };
 }
