@@ -69,21 +69,6 @@ function getAverageScore(listing: Listing) {
   return scores.reduce((sum, score) => sum + score, 0) / scores.length;
 }
 
-function isRecentlyAdded(createdAt?: string | null) {
-  if (!createdAt) return false;
-  const createdAtTime = new Date(createdAt).getTime();
-  if (Number.isNaN(createdAtTime)) return false;
-  const hours24 = 24 * 60 * 60 * 1000;
-  return Date.now() - createdAtTime <= hours24;
-}
-
-function hasBothScores(listing: Listing) {
-  return (
-    (listing.sashaScore ?? 0) > 0 &&
-    (listing.glebScore ?? 0) > 0
-  );
-}
-
 function getBudgetStyles(status: ReturnType<typeof getBudgetStatus>) {
   if (status === "under") return "bg-emerald-50 text-emerald-700";
   if (status === "near") return "bg-amber-50 text-amber-700";
@@ -106,10 +91,20 @@ function getSqftStyles(status: ReturnType<typeof getSqftStatus>) {
 }
 
 function getSqftLabel(status: ReturnType<typeof getSqftStatus>) {
-  if (status === "meets-target") return "Meets sqft target";
-  if (status === "below-target") return "Below target sqft";
-  if (status === "below-minimum") return "Below minimum sqft";
+  if (status === "meets-target") return "Sqft target met";
+  if (status === "below-target") return "Below target";
+  if (status === "below-minimum") return "Below minimum";
   return "Sqft target unset";
+}
+
+function getCriteriaSymbol(signal: {
+  matched: boolean;
+  known: boolean;
+  importance: string;
+}) {
+  if (signal.matched) return "✓";
+  if (!signal.known) return "?";
+  return signal.importance === "must-have" ? "✕" : "!";
 }
 
 export default function ListingCard({
@@ -121,7 +116,6 @@ export default function ListingCard({
   const router = useRouter();
   const { currentUser } = useCurrentUser();
   const averageScore = getAverageScore(listing);
-  const recentlyAdded = isRecentlyAdded(listing.createdAt) && !hasBothScores(listing);
   const resolvedDetailHref = detailHref ?? `/listing/${listing.id}`;
   const matchSummary = preferences
     ? getCriteriaMatchSummary(preferences, {
@@ -229,21 +223,30 @@ export default function ListingCard({
   }
 
   return (
-    <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-      <div className="relative h-48 bg-slate-200">
+    <article className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+      <div className="relative h-48 overflow-hidden rounded-t-2xl bg-slate-200">
         <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
-          {recentlyAdded && (
-            <div className="rounded-full bg-rose-500 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
-              NEW
-            </div>
-          )}
-
           {averageScore !== null && (
             <div className="rounded-full bg-slate-900/85 px-2.5 py-1 text-xs font-semibold text-white shadow-sm backdrop-blur-sm">
               ⭐ {averageScore.toFixed(1)}
             </div>
           )}
         </div>
+
+        <select
+          value={listing.status}
+          aria-label="Listing status"
+          onChange={(e) =>
+            handleStatusChange(e.target.value as Listing["status"])
+          }
+          className="absolute right-3 top-3 z-10 max-w-[150px] rounded-full border border-white/50 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-800 shadow-sm outline-none backdrop-blur-sm focus:border-slate-400"
+        >
+          {STATUS_OPTIONS.map((status) => (
+            <option key={status} value={status}>
+              {formatStatusLabel(status)}
+            </option>
+          ))}
+        </select>
 
         {listing.coverImageUrl ? (
           <img
@@ -259,51 +262,35 @@ export default function ListingCard({
       </div>
 
       <div className="p-5">
-        <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="mb-3">
           <div className="min-w-0 flex-1">
             <h2 className="h-12 overflow-hidden text-lg font-semibold leading-6 text-slate-900">
               {listing.title}
             </h2>
             <p className="truncate text-sm text-slate-500">{listing.neighborhood}</p>
           </div>
-
-          <select
-            value={listing.status}
-            aria-label="Listing status"
-            onChange={(e) =>
-              handleStatusChange(e.target.value as Listing["status"])
-            }
-            className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 outline-none focus:border-slate-400"
-          >
-            {STATUS_OPTIONS.map((status) => (
-              <option key={status} value={status}>
-                {formatStatusLabel(status)}
-              </option>
-            ))}
-          </select>
         </div>
 
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-2xl font-bold text-slate-900">
-              ${listing.price.toLocaleString()}
-            </p>
+        <div className="mb-3 space-y-2">
+          <p className="text-xl font-bold text-slate-900">
+            ${listing.price.toLocaleString()}/mo
             {pricePerSqft !== null && (
-              <p className="text-xs font-medium text-slate-500">
-                ${pricePerSqft.toFixed(2)}/sqft
-              </p>
+              <span className="text-sm font-semibold text-slate-500">
+                {" "}• ${pricePerSqft.toFixed(2)}/sqft
+              </span>
             )}
-          </div>
-          <div className="flex flex-wrap gap-1.5">
+          </p>
+
+          <div className="flex flex-wrap gap-1.5 text-[11px]">
             <span
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${getBudgetStyles(
+              className={`rounded-full px-2 py-0.5 font-semibold ${getBudgetStyles(
                 budgetStatus
               )}`}
             >
               {getBudgetLabel(budgetStatus)}
             </span>
             <span
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${getSqftStyles(
+              className={`rounded-full px-2 py-0.5 font-semibold ${getSqftStyles(
                 sqftStatus
               )}`}
             >
@@ -313,34 +300,33 @@ export default function ListingCard({
         </div>
 
         {matchSummary && (
-          <div className="mb-4 rounded-xl bg-slate-50 p-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-sm font-medium text-slate-700">
+          <div className="mb-3 rounded-xl bg-slate-50 px-3 py-2">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Criteria match
               </p>
-              <p className="text-sm font-semibold text-slate-900">
+              <p className="text-sm font-bold text-slate-900">
                 {matchSummary.percentage === null
-                  ? "No weighted criteria"
+                  ? "—"
                   : `${matchSummary.percentage}%`}
               </p>
             </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-x-2 gap-y-1">
               {visibleSignals?.map((signal) => (
                 <span
                   key={signal.key}
                   title={`${signal.label}: ${signal.summary}`}
-                  className={`rounded-full px-2 py-1 text-[11px] font-medium ${
+                  className={`text-[11px] font-semibold ${
                     signal.matched
-                      ? "bg-emerald-100 text-emerald-700"
+                      ? "text-emerald-700"
                       : signal.importance === "must-have"
-                        ? "bg-rose-100 text-rose-700"
+                        ? "text-rose-700"
                         : signal.known
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-slate-200 text-slate-600"
+                          ? "text-amber-700"
+                          : "text-slate-500"
                   }`}
                 >
-                  {signal.matched ? "OK" : signal.known ? "Missing" : "?"}{" "}
-                  {signal.label}
+                  {getCriteriaSymbol(signal)} {signal.label}
                 </span>
               ))}
             </div>
@@ -355,45 +341,17 @@ export default function ListingCard({
           </div>
         )}
 
-        <div className="mb-4 grid grid-cols-2 gap-3 text-sm text-slate-600">
-          <div>
-            <p className="text-slate-400">Type</p>
-            <p className="font-medium text-slate-700">{listing.type}</p>
-          </div>
-          <div>
-            <p className="text-slate-400">Furnished</p>
-            <p className="font-medium text-slate-700">{listing.furnished || "—"}</p>
-          </div>
-          <div>
-            <p className="text-slate-400">Move-in</p>
-            <p className="font-medium text-slate-700">{listing.moveInDate || "—"}</p>
-          </div>
-          <div>
-            <p className="text-slate-400">Added by</p>
-            <p className="font-medium text-slate-700">{listing.addedBy}</p>
-          </div>
-        </div>
-
-        <div className="mb-4 flex items-center justify-end text-sm text-slate-600">
-          <div className="flex flex-col items-end gap-1">
-            {listing.url && (
-              <a
-                href={listing.url}
-                target="_blank"
-                rel="noreferrer"
-                className="font-medium text-slate-900 underline underline-offset-2"
-              >
-                Open listing
-              </a>
-            )}
-
-            <button
-              onClick={checkIfStillActive}
-              className="text-xs text-slate-500 underline hover:text-slate-700"
-            >
-              Check if still active
-            </button>
-          </div>
+        <div className="mb-4 space-y-1 text-sm font-medium text-slate-600">
+          <p>
+            <span className="text-slate-800">{listing.type || "—"}</span>
+            <span className="text-slate-400"> • </span>
+            <span>{listing.furnished || "Unknown"} furnished</span>
+          </p>
+          <p>
+            <span>Move-in {listing.moveInDate || "—"}</span>
+            <span className="text-slate-400"> • </span>
+            <span>Added by {listing.addedBy || "—"}</span>
+          </p>
         </div>
 
         <div className="mb-4 grid grid-cols-2 gap-2">
@@ -428,14 +386,13 @@ export default function ListingCard({
           </select>
         </div>
 
-        <div className="mb-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-          <p className="mb-1 font-medium text-slate-700">Comments</p>
-          <p className="h-16 overflow-y-auto pr-1">
-            {listing.comments || "No comments yet."}
-          </p>
-        </div>
+        {listing.comments && (
+          <div className="mb-4 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            <p className="line-clamp-2">{listing.comments}</p>
+          </div>
+        )}
 
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <Link
             href={resolvedDetailHref}
             onClick={onOpenDetails}
@@ -451,19 +408,43 @@ export default function ListingCard({
             Message
           </Link>
 
-          <Link
-            href={`/edit/${listing.id}`}
-            className="rounded-xl border border-slate-200 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
-          >
-            Edit
-          </Link>
-
-          <button
-            onClick={handleDelete}
-            className="rounded-xl bg-red-500 py-2 text-sm font-medium text-white hover:bg-red-600"
-          >
-            Delete
-          </button>
+          <details className="group relative [&_summary::-webkit-details-marker]:hidden">
+            <summary className="cursor-pointer list-none rounded-xl border border-slate-200 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-100">
+              More
+            </summary>
+            <div className="absolute bottom-full right-0 z-20 mb-2 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-sm shadow-lg">
+              {listing.url && (
+                <a
+                  href={listing.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block px-3 py-2 text-slate-700 hover:bg-slate-50"
+                >
+                  Open original
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={checkIfStillActive}
+                className="block w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
+              >
+                Check active
+              </button>
+              <Link
+                href={`/edit/${listing.id}`}
+                className="block px-3 py-2 text-slate-700 hover:bg-slate-50"
+              >
+                Edit
+              </Link>
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="block w-full px-3 py-2 text-left text-rose-700 hover:bg-rose-50"
+              >
+                Delete
+              </button>
+            </div>
+          </details>
         </div>
       </div>
     </article>
