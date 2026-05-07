@@ -14,9 +14,6 @@ type Props = {
   status: ListingStatus;
   sashaScore: number | null;
   glebScore: number | null;
-  comments: string | null;
-  pros: string | null;
-  cons: string | null;
 };
 
 const STATUS_OPTIONS: ListingStatus[] = [
@@ -37,9 +34,6 @@ export default function ListingQuickEditPanel({
   status,
   sashaScore,
   glebScore,
-  comments,
-  pros,
-  cons,
 }: Props) {
   const router = useRouter();
   const { currentUser } = useCurrentUser();
@@ -53,9 +47,6 @@ export default function ListingQuickEditPanel({
   const [localGlebScore, setLocalGlebScore] = useState(
     glebScore && glebScore > 0 ? String(glebScore) : ""
   );
-  const [localComments, setLocalComments] = useState(comments ?? "");
-  const [localPros, setLocalPros] = useState(pros ?? "");
-  const [localCons, setLocalCons] = useState(cons ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -116,28 +107,20 @@ export default function ListingQuickEditPanel({
     });
   }
 
-  async function handleNotesSave() {
-    await updateListing({
-      comments: localComments || null,
-      pros: localPros || null,
-      cons: localCons || null,
-    });
-  }
-
   return (
-    <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-      <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+    <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-medium text-slate-500">Quick edit</p>
-          <h2 className="text-xl font-semibold text-slate-900">Viewing and notes</h2>
+          <p className="text-sm font-medium text-slate-500">Viewing</p>
+          <h2 className="text-lg font-semibold text-slate-900">Quick actions</h2>
         </div>
         {message && <p className="text-sm text-slate-500">{message}</p>}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="space-y-3">
         <label className="block">
-          <span className="mb-2 block text-sm font-medium text-slate-700">
-            Viewing date / time
+          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Date / time
           </span>
           <input
             type="datetime-local"
@@ -149,7 +132,7 @@ export default function ListingQuickEditPanel({
         </label>
 
         <label className="block">
-          <span className="mb-2 block text-sm font-medium text-slate-700">
+          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
             Status
           </span>
           <select
@@ -168,90 +151,53 @@ export default function ListingQuickEditPanel({
           </select>
         </label>
 
-        <select
-          value={localSashaScore}
-          onChange={(event) =>
-            handleScoreChange("sasha_score", event.target.value)
-          }
-          disabled={isSaving}
-          className={`rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60 ${
-            currentUser === "Sasha" ? "border-blue-300" : "border-slate-200"
-          }`}
-        >
-          <option value="">Sasha score</option>
-          {Array.from({ length: 10 }, (_, index) => index + 1).map((score) => (
-            <option key={score} value={score}>
-              Sasha: {score}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={localGlebScore}
-          onChange={(event) =>
-            handleScoreChange("gleb_score", event.target.value)
-          }
-          disabled={isSaving}
-          className={`rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60 ${
-            currentUser === "Gleb" ? "border-blue-300" : "border-slate-200"
-          }`}
-        >
-          <option value="">Gleb score</option>
-          {Array.from({ length: 10 }, (_, index) => index + 1).map((score) => (
-            <option key={score} value={score}>
-              Gleb: {score}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="mt-4 grid gap-3">
-        <label className="block">
-          <span className="mb-2 block text-sm font-medium text-slate-700">
-            Comments
-          </span>
-          <textarea
-            value={localComments}
-            onChange={(event) => setLocalComments(event.target.value)}
-            rows={3}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
-          />
-        </label>
-
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-slate-700">
-              Pros
+          <div>
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Sasha
             </span>
-            <textarea
-              value={localPros}
-              onChange={(event) => setLocalPros(event.target.value)}
-              rows={3}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
-            />
-          </label>
+            <select
+              value={localSashaScore}
+              onChange={(event) =>
+                handleScoreChange("sasha_score", event.target.value)
+              }
+              disabled={isSaving}
+              className={`w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60 ${
+                currentUser === "Sasha" ? "border-blue-300" : "border-slate-200"
+              }`}
+            >
+              <option value="">Score</option>
+              {Array.from({ length: 10 }, (_, index) => index + 1).map((score) => (
+                <option key={score} value={score}>
+                  {score}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-slate-700">
-              Cons
+          <div>
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Gleb
             </span>
-            <textarea
-              value={localCons}
-              onChange={(event) => setLocalCons(event.target.value)}
-              rows={3}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
-            />
-          </label>
+            <select
+              value={localGlebScore}
+              onChange={(event) =>
+                handleScoreChange("gleb_score", event.target.value)
+              }
+              disabled={isSaving}
+              className={`w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60 ${
+                currentUser === "Gleb" ? "border-blue-300" : "border-slate-200"
+              }`}
+            >
+              <option value="">Score</option>
+              {Array.from({ length: 10 }, (_, index) => index + 1).map((score) => (
+                <option key={score} value={score}>
+                  {score}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-
-        <button
-          type="button"
-          onClick={handleNotesSave}
-          disabled={isSaving}
-          className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60 sm:w-auto sm:self-start"
-        >
-          Save notes
-        </button>
       </div>
     </section>
   );

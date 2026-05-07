@@ -341,17 +341,11 @@ export default function ListingCard({
           </div>
         )}
 
-        <div className="mb-4 space-y-1 text-sm font-medium text-slate-600">
-          <p>
-            <span className="text-slate-800">{listing.type || "—"}</span>
-            <span className="text-slate-400"> • </span>
-            <span>{listing.furnished || "Unknown"} furnished</span>
-          </p>
-          <p>
-            <span>Move-in {listing.moveInDate || "—"}</span>
-            <span className="text-slate-400"> • </span>
-            <span>Added by {listing.addedBy || "—"}</span>
-          </p>
+        <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-1 text-sm font-medium text-slate-600">
+          <p className="truncate">{listing.type || "—"}</p>
+          <p className="truncate">{listing.furnished || "Unknown"} furnished</p>
+          <p className="truncate">{listing.moveInDate || "—"}</p>
+          <p className="truncate">Added by {listing.addedBy || "—"}</p>
         </div>
 
         <div className="mb-4 grid grid-cols-2 gap-2">
