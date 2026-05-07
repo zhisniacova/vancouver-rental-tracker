@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -29,6 +29,7 @@ type AutofillListingResponse = Partial<{
   storageLocker: AmenityValue;
   inSuiteWasher: AmenityValue;
   gym: AmenityValue;
+  petPolicy: string;
   earliestMoveIn: string;
   sqft: string;
   rawDescription: string;
@@ -36,9 +37,18 @@ type AutofillListingResponse = Partial<{
   status: ListingStatus;
   viewingDate: string;
   contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  contactMedium: string;
+  contactDetails: string;
   aiEnhanced: boolean;
   warnings: string[];
 }>;
+
+type AutofillListingRequest = {
+  url: string;
+  descriptionOverride?: string;
+};
 
 type ListingFormData = {
   url: string;
@@ -53,11 +63,14 @@ type ListingFormData = {
   storageLocker: AmenityValue;
   inSuiteWasher: AmenityValue;
   gym: AmenityValue;
+  petPolicy: string;
   earliestMoveIn: string;
   sqft: string;
   contactName: string;
   contactEmail: string;
   contactPhone: string;
+  contactMedium: string;
+  contactDetails: string;
   status: ListingStatus;
   messagedBy: string;
   viewingDate: string;
@@ -82,11 +95,14 @@ type ExistingListing = {
   storage_locker: AmenityValue | null;
   in_suite_washer: AmenityValue | null;
   gym: AmenityValue | null;
+  pet_policy?: string | null;
   earliest_move_in: string | null;
   sqft: number | null;
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  contact_medium?: string | null;
+  contact_details?: string | null;
   status: ListingStatus | null;
   messaged_by: string | null;
   viewing_date: string | null;
@@ -104,6 +120,31 @@ type Props = {
 
 const fieldClassName =
   "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-400";
+
+const sectionClassName =
+  "rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200";
+
+function FormSection({
+  title,
+  description,
+  children,
+  className = "",
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`${sectionClassName} ${className}`}>
+      <div className="mb-5">
+        <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
+        {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+      </div>
+      {children}
+    </section>
+  );
+}
 
 function getInitialFormData(
   currentUser: "Sasha" | "Gleb",
@@ -123,11 +164,14 @@ function getInitialFormData(
       storageLocker: "Unknown",
       inSuiteWasher: "Unknown",
       gym: "Unknown",
+      petPolicy: "",
       earliestMoveIn: "",
       sqft: "",
       contactName: "",
       contactEmail: "",
       contactPhone: "",
+      contactMedium: "Unknown",
+      contactDetails: "",
       status: "new",
       messagedBy: "None",
       viewingDate: "",
@@ -152,11 +196,14 @@ function getInitialFormData(
     storageLocker: existingListing.storage_locker || "Unknown",
     inSuiteWasher: existingListing.in_suite_washer || "Unknown",
     gym: existingListing.gym || "Unknown",
+    petPolicy: existingListing.pet_policy || "",
     earliestMoveIn: existingListing.earliest_move_in || "",
     sqft: existingListing.sqft?.toString() || "",
     contactName: existingListing.contact_name || "",
     contactEmail: existingListing.contact_email || "",
     contactPhone: existingListing.contact_phone || "",
+    contactMedium: existingListing.contact_medium || "Unknown",
+    contactDetails: existingListing.contact_details || "",
     status: existingListing.status || "new",
     messagedBy: existingListing.messaged_by || "None",
     viewingDate: existingListing.viewing_date
@@ -210,6 +257,11 @@ export default function ListingForm({ existingListing }: Props) {
     setFormData((current) => ({
       ...current,
       [name]: value,
+      ...(name === "viewingDate" &&
+      value &&
+      (current.status === "new" || current.status === "messaged")
+        ? { status: "viewing_scheduled" as ListingStatus }
+        : {}),
     }));
   }
 
@@ -219,26 +271,39 @@ export default function ListingForm({ existingListing }: Props) {
   }
 
   function mergeAutofillData(data: AutofillListingResponse) {
-    setFormData((current) => ({
-      ...current,
-      title: data.title?.trim() || current.title,
-      price: data.price?.trim() || current.price,
-      location: data.location?.trim() || current.location,
-      neighborhood: data.neighborhood?.trim() || current.neighborhood,
-      type: data.type?.trim() || current.type,
-      furnished: data.furnished?.trim() || current.furnished,
-      parking: data.parking || current.parking,
-      storageLocker: data.storageLocker || current.storageLocker,
-      inSuiteWasher: data.inSuiteWasher || current.inSuiteWasher,
-      gym: data.gym || current.gym,
-      earliestMoveIn: data.earliestMoveIn?.trim() || current.earliestMoveIn,
-      sqft: data.sqft?.trim() || current.sqft,
-      rawDescription: data.rawDescription?.trim() || current.rawDescription,
-      imageUrl: data.imageUrl?.trim() || current.imageUrl,
-      status: data.status || current.status,
-      viewingDate: data.viewingDate?.trim() || current.viewingDate,
-      contactName: data.contactName?.trim() || current.contactName,
-    }));
+    setFormData((current) => {
+      const viewingDate = data.viewingDate?.trim() || current.viewingDate;
+      const status =
+        data.status === "viewing_scheduled" && !viewingDate
+          ? "new"
+          : data.status || current.status;
+
+      return {
+        ...current,
+        title: data.title?.trim() || current.title,
+        price: data.price?.trim() || current.price,
+        location: data.location?.trim() || current.location,
+        neighborhood: data.neighborhood?.trim() || current.neighborhood,
+        type: data.type?.trim() || current.type,
+        furnished: data.furnished?.trim() || current.furnished,
+        parking: data.parking || current.parking,
+        storageLocker: data.storageLocker || current.storageLocker,
+        inSuiteWasher: data.inSuiteWasher || current.inSuiteWasher,
+        gym: data.gym || current.gym,
+        earliestMoveIn: data.earliestMoveIn?.trim() || current.earliestMoveIn,
+        sqft: data.sqft?.trim() || current.sqft,
+        rawDescription: data.rawDescription?.trim() || current.rawDescription,
+        imageUrl: data.imageUrl?.trim() || current.imageUrl,
+        status,
+        viewingDate,
+        contactName: data.contactName?.trim() || current.contactName,
+        contactEmail: data.contactEmail?.trim() || current.contactEmail,
+        contactPhone: data.contactPhone?.trim() || current.contactPhone,
+        contactMedium: data.contactMedium?.trim() || current.contactMedium,
+        contactDetails: data.contactDetails?.trim() || current.contactDetails,
+        petPolicy: data.petPolicy?.trim() || current.petPolicy,
+      };
+    });
 
     if (data.imageUrl) {
       setCoverImageFile(null);
@@ -262,7 +327,10 @@ export default function ListingForm({ existingListing }: Props) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({
+          url,
+          descriptionOverride: formData.rawDescription.trim() || undefined,
+        } satisfies AutofillListingRequest),
       });
 
       const data = (await response.json()) as
@@ -354,11 +422,15 @@ export default function ListingForm({ existingListing }: Props) {
         storage_locker: formData.storageLocker || null,
         in_suite_washer: formData.inSuiteWasher || null,
         gym: formData.gym || null,
+        pet_policy: formData.petPolicy || null,
         earliest_move_in: formData.earliestMoveIn || null,
         sqft: formData.sqft ? Number(formData.sqft) : null,
         contact_name: formData.contactName || null,
         contact_email: formData.contactEmail || null,
         contact_phone: formData.contactPhone || null,
+        contact_medium:
+          formData.contactMedium === "Unknown" ? null : formData.contactMedium,
+        contact_details: formData.contactDetails || null,
         status: formData.status,
         messaged_by:
           formData.messagedBy === "None" ? null : formData.messagedBy,
@@ -381,24 +453,13 @@ export default function ListingForm({ existingListing }: Props) {
 
         if (error) throw error;
       } else {
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from("listings")
           .insert([payload])
           .select("id")
           .single();
 
         if (error) throw error;
-
-        const { error: likeError } = await supabase.from("listing_likes").insert([
-          {
-            listing_id: data.id,
-            user_name: formData.addedBy,
-          },
-        ]);
-
-        if (likeError) {
-          console.error("Error creating initial like:", likeError);
-        }
       }
 
       router.push("/");
@@ -413,48 +474,421 @@ export default function ListingForm({ existingListing }: Props) {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200"
-    >
-      <div className="grid gap-5 md:grid-cols-2">
-        {!existingListing && (
-          <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Workspace:{" "}
-            <span className="font-medium text-slate-900">
-              {isLoadingWorkspaces
-                ? "Loading..."
-                : currentWorkspace?.name ?? "No workspace selected"}
-            </span>
-          </div>
-        )}
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {!existingListing && (
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+          Workspace:{" "}
+          <span className="font-medium text-slate-900">
+            {isLoadingWorkspaces
+              ? "Loading..."
+              : currentWorkspace?.name ?? "No workspace selected"}
+          </span>
+        </div>
+      )}
 
-        <div className="md:col-span-2">
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Listing URL
-          </label>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <input
-              name="url"
-              type="url"
-              value={formData.url}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <FormSection
+          title="Listing Details"
+          description="Core listing facts and the original source link."
+        >
+          <div className="grid gap-5 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Listing URL
+              </label>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <input
+                  name="url"
+                  type="url"
+                  value={formData.url}
+                  onChange={handleChange}
+                  placeholder="Paste the listing URL"
+                  className={fieldClassName}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={handleAutofill}
+                  disabled={isAutofilling || !formData.url.trim()}
+                  className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-40"
+                >
+                  {isAutofilling ? "Autofilling..." : "Autofill"}
+                </button>
+              </div>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Title
+              </label>
+              <input
+                name="title"
+                type="text"
+                value={formData.title}
+                onChange={handleChange}
+                placeholder="Listing title"
+                className={fieldClassName}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Price
+              </label>
+              <input
+                name="price"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={formData.price}
+                onChange={handleChange}
+                placeholder="3250"
+                className={fieldClassName}
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Added by
+              </label>
+              <select
+                name="addedBy"
+                value={formData.addedBy}
+                onChange={handleChange}
+                className={fieldClassName}
+              >
+                <option>Sasha</option>
+                <option>Gleb</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Location / address
+              </label>
+              <input
+                name="location"
+                type="text"
+                value={formData.location}
+                onChange={handleChange}
+                placeholder="Address or location text"
+                className={fieldClassName}
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Neighborhood
+              </label>
+              <input
+                name="neighborhood"
+                type="text"
+                list="neighborhood-options"
+                value={formData.neighborhood}
+                onChange={handleChange}
+                placeholder="Type or choose a neighborhood"
+                className={fieldClassName}
+              />
+              <datalist id="neighborhood-options">
+                {neighborhoods.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Listing type
+              </label>
+              <select
+                name="type"
+                value={formData.type}
+                onChange={handleChange}
+                className={fieldClassName}
+              >
+                <option>Studio</option>
+                <option>1 Bed</option>
+                <option>1 Bed + Den</option>
+                <option>2 Bed</option>
+                <option>2 Bed + Den</option>
+                <option>House</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Furnished
+              </label>
+              <select
+                name="furnished"
+                value={formData.furnished}
+                onChange={handleChange}
+                className={fieldClassName}
+              >
+                <option>Unknown</option>
+                <option>Yes</option>
+                <option>No</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Area (sqft)
+              </label>
+              <input
+                name="sqft"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={formData.sqft}
+                onChange={handleChange}
+                placeholder="850"
+                className={fieldClassName}
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Earliest move-in
+              </label>
+              <input
+                name="earliestMoveIn"
+                type="date"
+                value={formData.earliestMoveIn}
+                onChange={handleChange}
+                className={fieldClassName}
+              />
+            </div>
+          </div>
+        </FormSection>
+
+        <FormSection
+          title="Viewing Details"
+          description="Schedule a viewing without hunting through the whole form."
+          className="lg:sticky lg:top-6 lg:self-start"
+        >
+          <div className="space-y-5">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Viewing date / time
+              </label>
+              <input
+                name="viewingDate"
+                type="datetime-local"
+                value={formData.viewingDate}
+                onChange={handleChange}
+                className={fieldClassName}
+              />
+              <p className="mt-2 text-xs text-slate-500">
+                Adding a date sets status to viewing scheduled when the listing is new or messaged.
+              </p>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Status
+              </label>
+              <select
+                name="status"
+                value={formData.status}
+                onChange={handleChange}
+                className={fieldClassName}
+              >
+                <option value="new">{formatStatusLabel("new")}</option>
+                <option value="messaged">{formatStatusLabel("messaged")}</option>
+                <option value="viewing_scheduled">
+                  {formatStatusLabel("viewing_scheduled")}
+                </option>
+                <option value="viewed">{formatStatusLabel("viewed")}</option>
+                <option value="expired">{formatStatusLabel("expired")}</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Messaged by
+              </label>
+              <select
+                name="messagedBy"
+                value={formData.messagedBy}
+                onChange={handleChange}
+                className={fieldClassName}
+              >
+                <option>None</option>
+                <option>Sasha</option>
+                <option>Gleb</option>
+              </select>
+            </div>
+          </div>
+        </FormSection>
+      </div>
+
+      <FormSection
+        title="Amenities / Important Criteria"
+        description="Track practical yes/no details and pet rules."
+      >
+        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Parking
+            </label>
+            <select
+              name="parking"
+              value={formData.parking}
               onChange={handleChange}
-              placeholder="Paste the listing URL"
               className={fieldClassName}
-              required
-            />
-            <button
-              type="button"
-              onClick={handleAutofill}
-              disabled={isAutofilling || !formData.url.trim()}
-              className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-40"
             >
-              {isAutofilling ? "Autofilling..." : "Autofill"}
-            </button>
+              <option>Unknown</option>
+              <option>Yes</option>
+              <option>No</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Storage
+            </label>
+            <select
+              name="storageLocker"
+              value={formData.storageLocker}
+              onChange={handleChange}
+              className={fieldClassName}
+            >
+              <option>Unknown</option>
+              <option>Yes</option>
+              <option>No</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Gym
+            </label>
+            <select
+              name="gym"
+              value={formData.gym}
+              onChange={handleChange}
+              className={fieldClassName}
+            >
+              <option>Unknown</option>
+              <option>Yes</option>
+              <option>No</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              In-suite laundry
+            </label>
+            <select
+              name="inSuiteWasher"
+              value={formData.inSuiteWasher}
+              onChange={handleChange}
+              className={fieldClassName}
+            >
+              <option>Unknown</option>
+              <option>Yes</option>
+              <option>No</option>
+            </select>
+          </div>
+
+          <div className="md:col-span-2 lg:col-span-4">
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Pets / pet policy
+            </label>
+            <textarea
+              name="petPolicy"
+              rows={3}
+              value={formData.petPolicy}
+              onChange={handleChange}
+              placeholder="Cats allowed, no pets, deposit required, unknown..."
+              className={fieldClassName}
+            />
           </div>
         </div>
+      </FormSection>
 
-        <div className="md:col-span-2 grid gap-5 md:grid-cols-2">
+      <FormSection title="Contact Information">
+        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Contact name
+            </label>
+            <input
+              name="contactName"
+              type="text"
+              value={formData.contactName}
+              onChange={handleChange}
+              placeholder="Landlord or contact person"
+              className={fieldClassName}
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Contact email
+            </label>
+            <input
+              name="contactEmail"
+              type="email"
+              value={formData.contactEmail}
+              onChange={handleChange}
+              placeholder="name@example.com"
+              className={fieldClassName}
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Contact phone
+            </label>
+            <input
+              name="contactPhone"
+              type="tel"
+              value={formData.contactPhone}
+              onChange={handleChange}
+              placeholder="604-123-4567"
+              className={fieldClassName}
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Contact medium
+            </label>
+            <select
+              name="contactMedium"
+              value={formData.contactMedium}
+              onChange={handleChange}
+              className={fieldClassName}
+            >
+              <option>Unknown</option>
+              <option>Website</option>
+              <option>Email</option>
+              <option>Phone</option>
+              <option>Text</option>
+            </select>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Other contact details
+            </label>
+            <textarea
+              name="contactDetails"
+              rows={3}
+              value={formData.contactDetails}
+              onChange={handleChange}
+              placeholder="Contact notes, hidden info, preferred instructions..."
+              className={fieldClassName}
+            />
+          </div>
+        </div>
+      </FormSection>
+
+      <FormSection title="Images">
+        <div className="grid gap-5 md:grid-cols-2">
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Upload cover image
@@ -482,391 +916,96 @@ export default function ListingForm({ existingListing }: Props) {
               placeholder="https://..."
               className={fieldClassName}
             />
-            <p className="mt-2 text-xs text-slate-500">
-              Good for quick copy-paste from a listing page.
-            </p>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Image preview
+            </label>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+              {previewUrl ? (
+                <div className="h-56 w-full">
+                  <img
+                    src={previewUrl}
+                    alt="Cover preview"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="flex h-56 items-center justify-center text-sm text-slate-500">
+                  No image selected yet
+                </div>
+              )}
+            </div>
           </div>
         </div>
+      </FormSection>
 
-        <div className="md:col-span-2">
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Image preview
-          </label>
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-            {previewUrl ? (
-              <div className="h-56 w-full">
-                <img
-                  src={previewUrl}
-                  alt="Cover preview"
-                  className="h-full w-full object-cover"
-                />
-              </div>
-            ) : (
-              <div className="flex h-56 items-center justify-center text-sm text-slate-500">
-                No image selected yet
-              </div>
-            )}
+      <FormSection title="Notes">
+        <div className="grid gap-5">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Pros
+            </label>
+            <textarea
+              name="pros"
+              rows={3}
+              value={formData.pros}
+              onChange={handleChange}
+              placeholder="What looks good about this place?"
+              className={fieldClassName}
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Cons
+            </label>
+            <textarea
+              name="cons"
+              rows={3}
+              value={formData.cons}
+              onChange={handleChange}
+              placeholder="Possible downsides"
+              className={fieldClassName}
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              General comments
+            </label>
+            <textarea
+              name="comments"
+              rows={4}
+              value={formData.comments}
+              onChange={handleChange}
+              placeholder="Anything else worth noting?"
+              className={fieldClassName}
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Raw description from site
+            </label>
+            <textarea
+              name="rawDescription"
+              rows={6}
+              value={formData.rawDescription}
+              onChange={handleChange}
+              placeholder="Paste the original listing description here..."
+              className={fieldClassName}
+            />
           </div>
         </div>
+      </FormSection>
 
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Added by
-          </label>
-          <select
-            name="addedBy"
-            value={formData.addedBy}
-            onChange={handleChange}
-            className={fieldClassName}
-          >
-            <option>Sasha</option>
-            <option>Gleb</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Title
-          </label>
-          <input
-            name="title"
-            type="text"
-            value={formData.title}
-            onChange={handleChange}
-            placeholder="Listing title"
-            className={fieldClassName}
-            required
-          />
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Price
-          </label>
-          <input
-            name="price"
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={formData.price}
-            onChange={handleChange}
-            placeholder="3250"
-            className={fieldClassName}
-          />
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Location
-          </label>
-          <input
-            name="location"
-            type="text"
-            value={formData.location}
-            onChange={handleChange}
-            placeholder="Address or location text"
-            className={fieldClassName}
-          />
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Neighborhood
-          </label>
-          <input
-            name="neighborhood"
-            type="text"
-            list="neighborhood-options"
-            value={formData.neighborhood}
-            onChange={handleChange}
-            placeholder="Type or choose a neighborhood"
-            className={fieldClassName}
-          />
-          <datalist id="neighborhood-options">
-            {neighborhoods.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
-          <p className="mt-2 text-xs text-slate-500">
-            You can type a new neighborhood. It will be saved for future listings.
-          </p>
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Type
-          </label>
-          <select
-            name="type"
-            value={formData.type}
-            onChange={handleChange}
-            className={fieldClassName}
-          >
-            <option>Studio</option>
-            <option>1 Bed</option>
-            <option>1 Bed + Den</option>
-            <option>2 Bed</option>
-            <option>2 Bed + Den</option>
-            <option>House</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Furnished
-          </label>
-          <select
-            name="furnished"
-            value={formData.furnished}
-            onChange={handleChange}
-            className={fieldClassName}
-          >
-            <option>Unknown</option>
-            <option>Yes</option>
-            <option>No</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Parking
-          </label>
-          <select
-            name="parking"
-            value={formData.parking}
-            onChange={handleChange}
-            className={fieldClassName}
-          >
-            <option>Unknown</option>
-            <option>Yes</option>
-            <option>No</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Storage locker
-          </label>
-          <select
-            name="storageLocker"
-            value={formData.storageLocker}
-            onChange={handleChange}
-            className={fieldClassName}
-          >
-            <option>Unknown</option>
-            <option>Yes</option>
-            <option>No</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            In-suite washer
-          </label>
-          <select
-            name="inSuiteWasher"
-            value={formData.inSuiteWasher}
-            onChange={handleChange}
-            className={fieldClassName}
-          >
-            <option>Unknown</option>
-            <option>Yes</option>
-            <option>No</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Gym
-          </label>
-          <select
-            name="gym"
-            value={formData.gym}
-            onChange={handleChange}
-            className={fieldClassName}
-          >
-            <option>Unknown</option>
-            <option>Yes</option>
-            <option>No</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Earliest move-in date
-          </label>
-          <input
-            name="earliestMoveIn"
-            type="date"
-            value={formData.earliestMoveIn}
-            onChange={handleChange}
-            className={fieldClassName}
-          />
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Area (sqft)
-          </label>
-          <input
-            name="sqft"
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={formData.sqft}
-            onChange={handleChange}
-            placeholder="850"
-            className={fieldClassName}
-          />
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Contact name
-          </label>
-          <input
-            name="contactName"
-            type="text"
-            value={formData.contactName}
-            onChange={handleChange}
-            placeholder="Landlord or contact person"
-            className={fieldClassName}
-          />
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Contact email
-          </label>
-          <input
-            name="contactEmail"
-            type="email"
-            value={formData.contactEmail}
-            onChange={handleChange}
-            placeholder="name@example.com"
-            className={fieldClassName}
-          />
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Contact phone
-          </label>
-          <input
-            name="contactPhone"
-            type="tel"
-            value={formData.contactPhone}
-            onChange={handleChange}
-            placeholder="604-123-4567"
-            className={fieldClassName}
-          />
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Status
-          </label>
-          <select
-            name="status"
-            value={formData.status}
-            onChange={handleChange}
-            className={fieldClassName}
-          >
-            <option value="new">{formatStatusLabel("new")}</option>
-            <option value="messaged">{formatStatusLabel("messaged")}</option>
-            <option value="viewing_scheduled">{formatStatusLabel("viewing_scheduled")}</option>
-            <option value="viewed">{formatStatusLabel("viewed")}</option>
-            <option value="expired">{formatStatusLabel("expired")}</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Messaged by
-          </label>
-          <select
-            name="messagedBy"
-            value={formData.messagedBy}
-            onChange={handleChange}
-            className={fieldClassName}
-          >
-            <option>None</option>
-            <option>Sasha</option>
-            <option>Gleb</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Viewing date
-          </label>
-          <input
-            name="viewingDate"
-            type="datetime-local"
-            value={formData.viewingDate}
-            onChange={handleChange}
-            className={fieldClassName}
-          />
-        </div>
-
-        <div className="md:col-span-2">
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Raw description from site
-          </label>
-          <textarea
-            name="rawDescription"
-            rows={6}
-            value={formData.rawDescription}
-            onChange={handleChange}
-            placeholder="Paste the original listing description here..."
-            className={fieldClassName}
-          />
-        </div>
-
-        <div className="md:col-span-2">
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Pros
-          </label>
-          <textarea
-            name="pros"
-            rows={3}
-            value={formData.pros}
-            onChange={handleChange}
-            placeholder="What looks good about this place?"
-            className={fieldClassName}
-          />
-        </div>
-
-        <div className="md:col-span-2">
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            Cons
-          </label>
-          <textarea
-            name="cons"
-            rows={3}
-            value={formData.cons}
-            onChange={handleChange}
-            placeholder="Possible downsides"
-            className={fieldClassName}
-          />
-        </div>
-
-        <div className="md:col-span-2">
-          <label className="mb-2 block text-sm font-medium text-slate-700">
-            General comments
-          </label>
-          <textarea
-            name="comments"
-            rows={4}
-            value={formData.comments}
-            onChange={handleChange}
-            placeholder="Anything else worth noting?"
-            className={fieldClassName}
-          />
-        </div>
-      </div>
-
-      {message && <p className="text-sm font-medium text-red-600">{message}</p>}
+      {message && (
+        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          {message}
+        </p>
+      )}
 
       <div className="flex items-center justify-end gap-3">
         <Link

@@ -8,6 +8,7 @@ type ListingStatus =
 
 type AutofillListingRequest = {
   url: string;
+  descriptionOverride?: string;
 };
 
 type AutofillListingData = {
@@ -21,6 +22,7 @@ type AutofillListingData = {
   storageLocker: AmenityValue;
   inSuiteWasher: AmenityValue;
   gym: AmenityValue;
+  petPolicy: string;
   earliestMoveIn: string;
   sqft: string;
   rawDescription: string;
@@ -28,6 +30,10 @@ type AutofillListingData = {
   status: ListingStatus;
   viewingDate: string;
   contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  contactMedium: string;
+  contactDetails: string;
   aiEnhanced: boolean;
   warnings: string[];
 };
@@ -88,6 +94,7 @@ function emptyListingData(): AutofillListingData {
     storageLocker: "Unknown",
     inSuiteWasher: "Unknown",
     gym: "Unknown",
+    petPolicy: "",
     earliestMoveIn: "",
     sqft: "",
     rawDescription: "",
@@ -95,6 +102,10 @@ function emptyListingData(): AutofillListingData {
     status: "new",
     viewingDate: "",
     contactName: "",
+    contactEmail: "",
+    contactPhone: "",
+    contactMedium: "Unknown",
+    contactDetails: "",
     aiEnhanced: false,
     warnings: [],
   };
@@ -180,6 +191,16 @@ function extractDescription(html: string) {
   return stripTags(postingBody).replace(/^QR Code Link to This Post\s*/i, "").trim();
 }
 
+function extractFacebookDescription(html: string) {
+  const metaDescription = getMetaContent(html, ["description", "og:description"]);
+  const text = stripTags(html);
+  const marketplaceText = text.match(
+    /(Live the[\s\S]{50,}?This one won[’']?t last[\s\S]{0,120})/i
+  )?.[1];
+
+  return marketplaceText || metaDescription;
+}
+
 function extractTitleLocation(html: string) {
   return getFirstMatch(html, [
     /<span[^>]+class=["'][^"']*\bpostingtitletext\b[^"']*["'][^>]*>[\s\S]*?<small[^>]*>\(([\s\S]*?)\)<\/small>/i,
@@ -198,11 +219,31 @@ function extractPrice(value: string) {
   return match ? match[1].replace(/,/g, "") : "";
 }
 
+function extractEmail(value: string) {
+  return value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] || "";
+}
+
+function extractPhone(value: string) {
+  return (
+    value.match(
+      /(?:\+?1[\s.-]?)?(?:\(?[2-9]\d{2}\)?[\s.-]?)?[2-9]\d{2}[\s.-]?\d{4}/
+    )?.[0] || ""
+  );
+}
+
 function extractSqft(value: string) {
   const match = value.match(
     /([0-9][0-9,]*)\s*(?:ft(?:\s*2|\s*²)?|sq\s*\.?\s*ft|sqft)\b/i
   );
   return match ? match[1].replace(/,/g, "") : "";
+}
+
+function extractAddress(value: string) {
+  return (
+    value.match(
+      /\b\d{2,6}\s+[A-Za-z][A-Za-z\s.'-]{2,40}\s+(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Blvd|Boulevard|Way|Lane|Ln|Crescent|Cres)\b/i
+    )?.[0] || ""
+  );
 }
 
 function extractDate(value: string) {
@@ -336,6 +377,32 @@ function inferListingType(html: string, title: string, attrText: string) {
   return "";
 }
 
+function inferListingTypeFromText(text: string) {
+  const normalized = text.toLowerCase();
+  const bedMatch = normalized.match(/\b([12])\s*(?:bed|bedroom|br)\b/);
+  const hasDen = /\bden\b/i.test(normalized);
+
+  if (normalized.includes("studio")) return "Studio";
+  if (bedMatch?.[1] === "1") return hasDen ? "1 Bed + Den" : "1 Bed";
+  if (bedMatch?.[1] === "2") return hasDen ? "2 Bed + Den" : "2 Bed";
+  if (/\b(house|townhouse|duplex)\b/i.test(normalized)) return "House";
+
+  return "";
+}
+
+function extractMarketplaceTitle(title: string, rawDescription: string) {
+  const cleanedTitle = title
+    .replace(/\s*\|\s*Facebook Marketplace.*$/i, "")
+    .replace(/\s*-\s*Facebook Marketplace.*$/i, "")
+    .trim();
+
+  if (cleanedTitle && !/^marketplace$/i.test(cleanedTitle)) {
+    return cleanedTitle;
+  }
+
+  return rawDescription.match(/\b\d+\s*Bed\s+\d+\s*Bath\s+-\s+[^\n]+/i)?.[0] || "";
+}
+
 function inferAmenityValues(attrText: string) {
   const text = attrText.toLowerCase();
 
@@ -400,6 +467,14 @@ function normalizeListingStatus(value: unknown): ListingStatus | "" {
   ];
 
   return statuses.includes(value as ListingStatus) ? (value as ListingStatus) : "";
+}
+
+function statusForViewingDate(status: ListingStatus, viewingDate: string): ListingStatus {
+  if (status === "viewing_scheduled" && !viewingDate) {
+    return "new";
+  }
+
+  return status;
 }
 
 function parseMonthName(monthText: string) {
@@ -474,8 +549,44 @@ function inferFromDescription(rawDescription: string, postedAt: string) {
       ? "Yes"
       : "Unknown";
 
+  const storageLocker: AmenityValue =
+    /\b(storage locker|storage included|1 storage|storage for your extras)\b/i.test(text)
+      ? "Yes"
+      : "Unknown";
+
+  const furnished: AmenityValue =
+    /\bunfurnished\b/i.test(text)
+      ? "No"
+      : /\bfurnished\b/i.test(text)
+        ? "Yes"
+        : "Unknown";
+
+  const petPolicy =
+    /\b(no pets|pet[s]? not allowed)\b/i.test(rawDescription)
+      ? "No pets"
+      : /\b(pet friendly|pets allowed|cats allowed|dogs allowed)\b/i.test(rawDescription)
+        ? rawDescription.match(/[^.\n]*(?:pet friendly|pets allowed|cats allowed|dogs allowed)[^.\n]*/i)?.[0]?.trim() || "Pets allowed"
+        : "Unknown";
+
   const contactNameMatch = rawDescription.match(
-    /\bmy name is\s+([A-Za-z][A-Za-z'-]{1,30})\b/i
+    /\b(?:my name is|contact)\s+([A-Za-z][A-Za-z'-]{1,30})\b/i
+  );
+
+  const contactMedium =
+    /\b(email only|email me|send an email)\b/i.test(rawDescription)
+      ? "Email"
+      : /\b(call\/text|call or text|text only|text me|sms)\b/i.test(rawDescription)
+        ? "Text"
+        : /\b(call only|phone only|call me)\b/i.test(rawDescription)
+          ? "Phone"
+          : /\bfacebook message|facebook messages|marketplace message|website message|\[hidden information\]\b/i.test(
+                rawDescription
+              )
+            ? "Website"
+            : "Unknown";
+
+  const contactDetailsMatch = rawDescription.match(
+    /(?:interested\??[\s\S]{0,180}|contact\s+[A-Za-z][A-Za-z'-]{1,30}[\s\S]{0,160})/i
   );
 
   const showingMatch = rawDescription.match(
@@ -507,8 +618,17 @@ function inferFromDescription(rawDescription: string, postedAt: string) {
   return {
     gym,
     parking,
+    storageLocker,
     inSuiteWasher,
+    furnished,
+    petPolicy,
     contactName: contactNameMatch?.[1] || "",
+    contactEmail: extractEmail(rawDescription),
+    contactPhone: /\[hidden information\]/i.test(rawDescription)
+      ? ""
+      : extractPhone(rawDescription),
+    contactMedium,
+    contactDetails: contactDetailsMatch?.[0]?.trim() || "",
     viewingDate,
     status,
   };
@@ -524,6 +644,11 @@ function normalizeListingType(value: unknown) {
   return LISTING_TYPES.includes(value as (typeof LISTING_TYPES)[number])
     ? (value as string)
     : "";
+}
+
+function normalizeContactMedium(value: unknown) {
+  const media = ["Unknown", "Website", "Email", "Phone", "Text"];
+  return media.includes(value as string) ? (value as string) : "Unknown";
 }
 
 function guessNeighborhood(text: string) {
@@ -579,6 +704,7 @@ async function enrichWithAi(
   if (!apiKey || !scrapedData.rawDescription) {
     return {
       ...scrapedData,
+      status: statusForViewingDate(scrapedData.status, scrapedData.viewingDate),
       warnings: [
         ...scrapedData.warnings,
         apiKey
@@ -592,6 +718,9 @@ async function enrichWithAi(
     type: "object",
     additionalProperties: false,
     properties: {
+      title: { type: "string" },
+      price: { type: "string" },
+      location: { type: "string" },
       neighborhood: { type: "string" },
       type: { enum: LISTING_TYPES },
       furnished: { enum: YES_NO_UNKNOWN },
@@ -599,6 +728,7 @@ async function enrichWithAi(
       storageLocker: { enum: YES_NO_UNKNOWN },
       inSuiteWasher: { enum: YES_NO_UNKNOWN },
       gym: { enum: YES_NO_UNKNOWN },
+      petPolicy: { type: "string" },
       earliestMoveIn: {
         type: "string",
         description: "ISO date in YYYY-MM-DD format, or an empty string.",
@@ -611,8 +741,15 @@ async function enrichWithAi(
           "Viewing datetime in YYYY-MM-DDTHH:mm format, or empty string if not stated.",
       },
       contactName: { type: "string" },
+      contactEmail: { type: "string" },
+      contactPhone: { type: "string" },
+      contactMedium: { enum: ["Unknown", "Website", "Email", "Phone", "Text"] },
+      contactDetails: { type: "string" },
     },
     required: [
+      "title",
+      "price",
+      "location",
       "neighborhood",
       "type",
       "furnished",
@@ -620,11 +757,16 @@ async function enrichWithAi(
       "storageLocker",
       "inSuiteWasher",
       "gym",
+      "petPolicy",
       "earliestMoveIn",
       "sqft",
       "status",
       "viewingDate",
       "contactName",
+      "contactEmail",
+      "contactPhone",
+      "contactMedium",
+      "contactDetails",
     ],
   };
 
@@ -641,7 +783,7 @@ async function enrichWithAi(
           {
             role: "system",
             content:
-              "Extract rental listing facts from the provided description. Prefer explicit statements only. Return Unknown when the description does not clearly say Yes or No. Do not infer amenities from neighborhood or vibes. earliestMoveIn must be YYYY-MM-DD or empty. viewingDate must be YYYY-MM-DDTHH:mm or empty. If viewing date text omits year, infer year from posted date context. If the text says a showing/viewing time is scheduled, set status to viewing_scheduled.",
+              "Extract rental listing facts from the provided description. Prefer explicit statements only. Return Unknown when the description does not clearly say Yes or No. Do not infer amenities from neighborhood or vibes. earliestMoveIn must be YYYY-MM-DD or empty. viewingDate must be YYYY-MM-DDTHH:mm or empty. If viewing date text omits year, infer year from posted date context. If the text says a showing/viewing time is scheduled, set status to viewing_scheduled; otherwise use new. For Facebook Marketplace hidden contact info, use contactMedium Website and summarize it in contactDetails.",
           },
           {
             role: "user",
@@ -686,9 +828,18 @@ async function enrichWithAi(
     const aiStatus = normalizeListingStatus(aiData.status);
     const aiViewingDate = normalizeDateTimeLocal(aiData.viewingDate || "");
     const aiContactName = (aiData.contactName || "").trim();
+    const aiContactEmail = (aiData.contactEmail || "").trim();
+    const aiContactPhone = (aiData.contactPhone || "").trim();
+    const aiContactMedium = normalizeContactMedium(aiData.contactMedium);
+    const aiContactDetails = (aiData.contactDetails || "").trim();
+    const viewingDate = aiViewingDate || scrapedData.viewingDate;
+    const status = statusForViewingDate(aiStatus || scrapedData.status, viewingDate);
 
     return {
       ...scrapedData,
+      title: scrapedData.title || aiData.title?.trim() || "",
+      price: scrapedData.price || extractPrice(aiData.price || ""),
+      location: scrapedData.location || aiData.location?.trim() || "",
       neighborhood:
         aiData.neighborhood?.trim() ||
         scrapedData.neighborhood ||
@@ -709,12 +860,18 @@ async function enrichWithAi(
           ? scrapedData.inSuiteWasher
           : aiInSuiteWasher,
       gym: scrapedData.gym !== "Unknown" ? scrapedData.gym : aiGym,
+      petPolicy: scrapedData.petPolicy || aiData.petPolicy?.trim() || "",
       earliestMoveIn:
         extractDate(aiData.earliestMoveIn || "") || scrapedData.earliestMoveIn,
       sqft: extractSqft(aiData.sqft || "") || scrapedData.sqft,
-      status: aiStatus || scrapedData.status,
-      viewingDate: aiViewingDate || scrapedData.viewingDate,
+      status,
+      viewingDate,
       contactName: aiContactName || scrapedData.contactName,
+      contactEmail: aiContactEmail || scrapedData.contactEmail,
+      contactPhone: aiContactPhone || scrapedData.contactPhone,
+      contactMedium:
+        aiContactMedium !== "Unknown" ? aiContactMedium : scrapedData.contactMedium,
+      contactDetails: aiContactDetails || scrapedData.contactDetails,
       aiEnhanced: true,
     };
   } catch (error) {
@@ -732,6 +889,8 @@ function scrapeListing(html: string): AutofillListingData {
   const metaDescription = getMetaContent(html, ["description", "og:description"]);
   const combinedText = stripTags(html);
   const attrText = extractAttrGroupText(html);
+  const isFacebookMarketplace =
+    /facebook\.com\/marketplace|Facebook Marketplace|marketplace\/item/i.test(html);
 
   data.title =
     getFirstMatch(html, [
@@ -740,7 +899,10 @@ function scrapeListing(html: string): AutofillListingData {
       /<title[^>]*>([\s\S]*?)<\/title>/i,
     ]) || getMetaContent(html, ["og:title", "twitter:title"]);
 
-  data.title = data.title.replace(/\s*-\s*.*craigslist.*$/i, "").trim();
+  data.title = data.title
+    .replace(/\s*-\s*.*craigslist.*$/i, "")
+    .replace(/\s*\|\s*Facebook Marketplace.*$/i, "")
+    .trim();
 
   data.price = extractPrice(
     getFirstMatch(html, [
@@ -757,7 +919,20 @@ function scrapeListing(html: string): AutofillListingData {
     ]) ||
     getMetaContent(html, ["geo.placename", "og:locality"]);
 
-  data.rawDescription = extractDescription(html) || metaDescription;
+  data.rawDescription =
+    extractDescription(html) ||
+    (isFacebookMarketplace ? extractFacebookDescription(html) : "") ||
+    metaDescription;
+
+  data.title = extractMarketplaceTitle(data.title, data.rawDescription);
+
+  if (!data.price) {
+    data.price = extractPrice(data.rawDescription);
+  }
+
+  if (!data.location) {
+    data.location = extractAddress(data.rawDescription);
+  }
 
   data.imageUrl = getMetaContent(html, [
     "og:image",
@@ -765,9 +940,12 @@ function scrapeListing(html: string): AutofillListingData {
     "twitter:image:src",
   ]);
 
-  data.sqft = extractSqft(attrText) || extractSqft(combinedText);
-  data.earliestMoveIn = extractAvailableFromHtml(html, attrText);
-  data.type = inferListingType(html, data.title, attrText);
+  data.sqft = extractSqft(attrText) || extractSqft(combinedText) || extractSqft(data.rawDescription);
+  data.earliestMoveIn =
+    extractAvailableFromHtml(html, attrText) || parseAvailableDate(data.rawDescription);
+  data.type =
+    inferListingType(html, data.title, attrText) ||
+    inferListingTypeFromText(`${data.title} ${data.rawDescription}`);
   const inferredAmenities = inferAmenityValues(attrText);
   data.furnished = inferredAmenities.furnished;
   data.parking = inferredAmenities.parking;
@@ -779,15 +957,26 @@ function scrapeListing(html: string): AutofillListingData {
   );
   const descriptionSignals = inferFromDescription(data.rawDescription, extractPostedAt(html));
   data.gym = data.gym !== "Unknown" ? data.gym : descriptionSignals.gym;
+  data.storageLocker =
+    data.storageLocker !== "Unknown"
+      ? data.storageLocker
+      : descriptionSignals.storageLocker;
+  data.furnished =
+    data.furnished !== "Unknown" ? data.furnished : descriptionSignals.furnished;
   data.parking =
     data.parking !== "Unknown" ? data.parking : descriptionSignals.parking;
   data.inSuiteWasher =
     data.inSuiteWasher !== "Unknown"
       ? data.inSuiteWasher
       : descriptionSignals.inSuiteWasher;
+  data.petPolicy = descriptionSignals.petPolicy;
   data.contactName = descriptionSignals.contactName;
+  data.contactEmail = descriptionSignals.contactEmail;
+  data.contactPhone = descriptionSignals.contactPhone;
+  data.contactMedium = descriptionSignals.contactMedium;
+  data.contactDetails = descriptionSignals.contactDetails;
   data.viewingDate = descriptionSignals.viewingDate;
-  data.status = descriptionSignals.status;
+  data.status = statusForViewingDate(descriptionSignals.status, data.viewingDate);
 
   if (!data.title) {
     data.warnings.push("Could not find a title on the listing page.");
@@ -800,10 +989,39 @@ function scrapeListing(html: string): AutofillListingData {
   return data;
 }
 
+function listingDataFromDescription(rawDescription: string): AutofillListingData {
+  const data = emptyListingData();
+  data.rawDescription = rawDescription.trim();
+  data.price = extractPrice(data.rawDescription);
+  data.location = extractAddress(data.rawDescription);
+  data.sqft = extractSqft(data.rawDescription);
+  data.earliestMoveIn = parseAvailableDate(data.rawDescription);
+  data.type = inferListingTypeFromText(data.rawDescription);
+  data.neighborhood = guessNeighborhood(data.rawDescription);
+
+  const descriptionSignals = inferFromDescription(data.rawDescription, "");
+  data.gym = descriptionSignals.gym;
+  data.parking = descriptionSignals.parking;
+  data.storageLocker = descriptionSignals.storageLocker;
+  data.inSuiteWasher = descriptionSignals.inSuiteWasher;
+  data.furnished = descriptionSignals.furnished;
+  data.petPolicy = descriptionSignals.petPolicy;
+  data.contactName = descriptionSignals.contactName;
+  data.contactEmail = descriptionSignals.contactEmail;
+  data.contactPhone = descriptionSignals.contactPhone;
+  data.contactMedium = descriptionSignals.contactMedium;
+  data.contactDetails = descriptionSignals.contactDetails;
+  data.viewingDate = descriptionSignals.viewingDate;
+  data.status = statusForViewingDate(descriptionSignals.status, data.viewingDate);
+
+  return data;
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as AutofillListingRequest;
     const rawUrl = body.url?.trim();
+    const descriptionOverride = body.descriptionOverride?.trim() || "";
 
     if (!rawUrl) {
       return Response.json({ error: "Missing listing URL" }, { status: 400 });
@@ -828,8 +1046,11 @@ export async function POST(request: Request) {
       method: "GET",
       redirect: "follow",
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; VancouverRentalTracker/1.0)",
-        Accept: "text/html,application/xhtml+xml",
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
       },
       cache: "no-store",
     });
@@ -842,6 +1063,32 @@ export async function POST(request: Request) {
     }
 
     const html = await listingResponse.text();
+
+    if (
+      /facebook\.com$/i.test(url.hostname) &&
+      /Sorry, something went wrong|You must log in|Log in to Facebook/i.test(html)
+    ) {
+      if (descriptionOverride) {
+        const pastedData = listingDataFromDescription(descriptionOverride);
+        const enrichedData = await enrichWithAi(pastedData, { postedAt: "" });
+        return Response.json({
+          ...enrichedData,
+          warnings: [
+            ...enrichedData.warnings,
+            "Facebook blocked server-side URL fetching, so autofill used the pasted raw description.",
+          ],
+        });
+      }
+
+      return Response.json(
+        {
+          error:
+            "Facebook blocked the server-side fetch for this Marketplace listing. Open the listing, copy the expanded description, paste it into Raw description, then click Autofill again.",
+        },
+        { status: 502 }
+      );
+    }
+
     const scrapedData = scrapeListing(html);
     const postedAt = extractPostedAt(html);
     const enrichedData = await enrichWithAi(scrapedData, { postedAt });

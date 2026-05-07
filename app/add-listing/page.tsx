@@ -4,7 +4,7 @@ import ListingForm from "@/components/ListingForm";
 export default function AddListingPage() {
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-6xl">
         <div className="mb-8 flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-slate-500">New listing</p>
