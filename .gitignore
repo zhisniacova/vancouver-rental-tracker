@@ -41,3 +41,4 @@ yarn-error.log*
 next-env.d.ts
 
 PROJECT_CONTEXT.md
+supabase/.temp/

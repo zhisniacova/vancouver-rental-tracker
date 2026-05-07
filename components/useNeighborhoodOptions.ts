@@ -37,7 +37,29 @@ export function useNeighborhoodOptions() {
   }
 
   useEffect(() => {
-    loadNeighborhoods();
+    let isCancelled = false;
+
+    async function loadInitialNeighborhoods() {
+      const { data, error } = await supabase
+        .from("neighborhoods")
+        .select("name")
+        .order("name", { ascending: true });
+
+      if (error) {
+        console.error("Error loading neighborhoods:", error);
+        return;
+      }
+
+      if (!isCancelled) {
+        setNeighborhoods(data.map((row) => row.name));
+      }
+    }
+
+    loadInitialNeighborhoods();
+
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   return {

@@ -24,11 +24,15 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem("currentUser");
-    if (savedUser === "Sasha" || savedUser === "Gleb") {
-      setCurrentUserState(savedUser);
-    }
-    setMounted(true);
+    const frame = window.requestAnimationFrame(() => {
+      const savedUser = localStorage.getItem("currentUser");
+      if (savedUser === "Sasha" || savedUser === "Gleb") {
+        setCurrentUserState(savedUser);
+      }
+      setMounted(true);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   function setCurrentUser(user: CurrentUser) {
