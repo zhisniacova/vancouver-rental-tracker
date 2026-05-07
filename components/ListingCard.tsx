@@ -12,13 +12,18 @@ export type Listing = {
   title: string;
   price: number;
   neighborhood: string;
+  location: string;
   type: string;
   furnished: boolean;
   moveInDate: string;
   addedBy: string;
   status: "new" | "messaged" | "viewing_scheduled" | "viewed" | "expired";
-  likes: string[];
   comments: string;
+  pros: string;
+  cons: string;
+  rawDescription: string;
+  contactName: string;
+  contactEmail: string;
   url: string;
   coverImageUrl?: string | null;
   createdAt?: string | null;
@@ -29,6 +34,8 @@ export type Listing = {
 
 type Props = {
   listing: Listing;
+  detailHref?: string;
+  onOpenDetails?: () => void;
 };
 
 const STATUS_OPTIONS: Listing["status"][] = [
@@ -64,15 +71,12 @@ function hasBothScores(listing: Listing) {
   );
 }
 
-export default function ListingCard({ listing }: Props) {
+export default function ListingCard({ listing, detailHref, onOpenDetails }: Props) {
   const router = useRouter();
   const { currentUser } = useCurrentUser();
-  const bothLiked =
-    listing.likes.includes("Sasha") && listing.likes.includes("Gleb");
   const averageScore = getAverageScore(listing);
   const recentlyAdded = isRecentlyAdded(listing.createdAt) && !hasBothScores(listing);
-
-  const otherUser = currentUser === "Sasha" ? "Gleb" : "Sasha";
+  const resolvedDetailHref = detailHref ?? `/listing/${listing.id}`;
 
   async function handleDelete() {
     const confirmDelete = window.confirm("Delete this listing?");
@@ -84,37 +88,6 @@ export default function ListingCard({ listing }: Props) {
       console.error("Delete error:", error);
       alert(`Error deleting listing: ${error.message}`);
       return;
-    }
-
-    router.refresh();
-  }
-
-  async function toggleLike(userName: "Sasha" | "Gleb") {
-    const alreadyLiked = listing.likes.includes(userName);
-
-    if (alreadyLiked) {
-      const { error } = await supabase
-        .from("listing_likes")
-        .delete()
-        .eq("listing_id", listing.id)
-        .eq("user_name", userName);
-
-      if (error) {
-        console.error("Error removing like:", error);
-        return;
-      }
-    } else {
-      const { error } = await supabase.from("listing_likes").insert([
-        {
-          listing_id: listing.id,
-          user_name: userName,
-        },
-      ]);
-
-      if (error) {
-        console.error("Error adding like:", error);
-        return;
-      }
     }
 
     router.refresh();
@@ -175,8 +148,6 @@ export default function ListingCard({ listing }: Props) {
     value: string
   ) {
     const scoreValue = value === "" ? null : Number(value);
-    const userName = person === "sasha_score" ? "Sasha" : "Gleb";
-
     const { error } = await supabase
       .from("listings")
       .update({ [person]: scoreValue })
@@ -188,28 +159,11 @@ export default function ListingCard({ listing }: Props) {
       return;
     }
 
-    if (scoreValue !== null && scoreValue > 5 && !listing.likes.includes(userName)) {
-      const { error: likeError } = await supabase.from("listing_likes").insert([
-        {
-          listing_id: listing.id,
-          user_name: userName,
-        },
-      ]);
-
-      if (likeError) {
-        console.error("Error auto-liking after score update:", likeError);
-      }
-    }
-
     router.refresh();
   }
 
   return (
-    <article
-      className={`overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ${
-        bothLiked ? "ring-emerald-300" : "ring-slate-200"
-      }`}
-    >
+    <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
       <div className="relative h-48 bg-slate-200">
         <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
           {recentlyAdded && (
@@ -221,12 +175,6 @@ export default function ListingCard({ listing }: Props) {
           {averageScore !== null && (
             <div className="rounded-full bg-slate-900/85 px-2.5 py-1 text-xs font-semibold text-white shadow-sm backdrop-blur-sm">
               ⭐ {averageScore.toFixed(1)}
-            </div>
-          )}
-
-          {bothLiked && (
-            <div className="rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-white shadow-sm">
-              Both liked
             </div>
           )}
         </div>
@@ -298,23 +246,18 @@ export default function ListingCard({ listing }: Props) {
           </div>
         </div>
 
-        <div className="mb-4 flex items-center justify-between text-sm text-slate-600">
-          <div>
-            <p>❤️ {listing.likes.length} likes</p>
-            <p className="text-xs text-slate-500">
-              {listing.likes.length > 0 ? listing.likes.join(", ") : "No likes yet"}
-            </p>
-          </div>
-
+        <div className="mb-4 flex items-center justify-end text-sm text-slate-600">
           <div className="flex flex-col items-end gap-1">
-            <a
-              href={listing.url}
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-slate-900 underline underline-offset-2"
-            >
-              Open listing
-            </a>
+            {listing.url && (
+              <a
+                href={listing.url}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-slate-900 underline underline-offset-2"
+              >
+                Open listing
+              </a>
+            )}
 
             <button
               onClick={checkIfStillActive}
@@ -323,34 +266,6 @@ export default function ListingCard({ listing }: Props) {
               Check if still active
             </button>
           </div>
-        </div>
-
-        <div className="mb-4 flex gap-2">
-          <button
-            onClick={() => toggleLike(currentUser)}
-            className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium ${
-              listing.likes.includes(currentUser)
-                ? "border-pink-200 bg-pink-50 text-pink-700"
-                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-            }`}
-          >
-            {listing.likes.includes(currentUser)
-              ? `♥ ${currentUser} liked`
-              : `♡ ${currentUser} like`}
-          </button>
-
-          <button
-            onClick={() => toggleLike(otherUser)}
-            className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium ${
-              listing.likes.includes(otherUser)
-                ? "border-pink-200 bg-pink-50 text-pink-700"
-                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-            }`}
-          >
-            {listing.likes.includes(otherUser)
-              ? `♥ ${otherUser} liked`
-              : `♡ ${otherUser} like`}
-          </button>
         </div>
 
         <div className="mb-4 grid grid-cols-2 gap-2">
@@ -394,7 +309,8 @@ export default function ListingCard({ listing }: Props) {
 
         <div className="grid grid-cols-4 gap-2">
           <Link
-            href={`/listing/${listing.id}`}
+            href={resolvedDetailHref}
+            onClick={onOpenDetails}
             className="rounded-xl border border-slate-200 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
           >
             View

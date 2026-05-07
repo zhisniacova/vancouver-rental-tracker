@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import ListingCard, { Listing } from "./ListingCard";
 import FilterBar from "./FilterBar";
@@ -8,8 +8,16 @@ import StatusBadge from "./StatusBadge";
 import { useCurrentUser } from "./CurrentUserProvider";
 import { useWorkspace } from "./WorkspaceProvider";
 
+export type DashboardInitialFilters = {
+  search: string;
+  selectedNeighborhoods: string[];
+  selectedStatuses: Listing["status"][];
+  sort: string;
+};
+
 type Props = {
   listings: Listing[];
+  initialFilters: DashboardInitialFilters;
 };
 
 function getAverageScore(listing: Listing) {
@@ -23,10 +31,7 @@ function getAverageScore(listing: Listing) {
 }
 
 function isTopPick(listing: Listing) {
-  const bothLiked =
-    listing.likes.includes("Sasha") && listing.likes.includes("Gleb");
-
-  return bothLiked && getAverageScore(listing) >= 8 && listing.status !== "expired";
+  return hasBothScores(listing) && getAverageScore(listing) >= 8 && listing.status !== "expired";
 }
 
 function isRecentlyAdded(createdAt?: string | null) {
@@ -88,9 +93,8 @@ function getActionTagsForUser(
     tags.push("Review");
   }
 
-  const bothLiked =
-    listing.likes.includes("Sasha") && listing.likes.includes("Gleb");
-  const needsMessaging = bothLiked && listing.status === "new";
+  const needsMessaging =
+    hasBothScores(listing) && getAverageScore(listing) >= 7 && listing.status === "new";
 
   if (needsMessaging) {
     tags.push("Message Soon");
@@ -114,7 +118,15 @@ function normalizeListingUrl(url?: string | null) {
   }
 }
 
-function TopPickCompactCard({ listing }: { listing: Listing }) {
+function TopPickCompactCard({
+  listing,
+  detailHref,
+  onOpenDetails,
+}: {
+  listing: Listing;
+  detailHref: string;
+  onOpenDetails: () => void;
+}) {
   const averageScore = getAverageScore(listing);
   const recentlyAdded = isRecentlyAdded(listing.createdAt) && !hasBothScores(listing);
 
@@ -164,7 +176,8 @@ function TopPickCompactCard({ listing }: { listing: Listing }) {
 
         <div className="grid grid-cols-2 gap-2">
           <Link
-            href={`/listing/${listing.id}`}
+            href={detailHref}
+            onClick={onOpenDetails}
             className="rounded-lg border border-slate-200 px-2 py-1.5 text-center text-xs font-medium text-slate-700 hover:bg-slate-50"
           >
             View
@@ -184,19 +197,14 @@ function TopPickCompactCard({ listing }: { listing: Listing }) {
 function NeedsActionCompactCard({
   listing,
   tags,
-  needsActionIds,
-  currentIndex,
+  detailHref,
+  onOpenDetails,
 }: {
   listing: Listing;
   tags: ExtendedActionTag[];
-  needsActionIds: string[];
-  currentIndex: number;
+  detailHref: string;
+  onOpenDetails: () => void;
 }) {
-  const queueParam = needsActionIds.join(",");
-  const openHref = `/listing/${listing.id}?na_ids=${encodeURIComponent(
-    queueParam
-  )}&na_i=${currentIndex}`;
-
   return (
     <article className="w-72 flex-none overflow-hidden rounded-xl bg-white ring-1 ring-amber-200">
       <div className="relative h-28 bg-slate-200">
@@ -243,7 +251,8 @@ function NeedsActionCompactCard({
 
         <div className="grid grid-cols-2 gap-2">
           <Link
-            href={openHref}
+            href={detailHref}
+            onClick={onOpenDetails}
             className="rounded-lg border border-slate-200 px-2 py-1.5 text-center text-xs font-medium text-slate-700 hover:bg-slate-50"
           >
             Open
@@ -260,14 +269,79 @@ function NeedsActionCompactCard({
   );
 }
 
-export default function Dashboard({ listings }: Props) {
+function searchableText(listing: Listing) {
+  return [
+    listing.title,
+    listing.location,
+    listing.neighborhood,
+    listing.contactName,
+    listing.contactEmail,
+    listing.comments,
+    listing.pros,
+    listing.cons,
+    listing.rawDescription,
+    listing.url,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function buildDashboardQuery({
+  search,
+  selectedNeighborhoods,
+  selectedStatuses,
+  sort,
+}: DashboardInitialFilters) {
+  const params = new URLSearchParams();
+  const cleanedSearch = search.trim();
+
+  if (cleanedSearch) params.set("q", cleanedSearch);
+  if (selectedNeighborhoods.length > 0) {
+    params.set("neighborhoods", selectedNeighborhoods.join(","));
+  }
+  if (selectedStatuses.length > 0) {
+    params.set("statuses", selectedStatuses.join(","));
+  }
+  if (sort !== "none") params.set("sort", sort);
+
+  return params.toString();
+}
+
+function rememberDashboardScroll() {
+  window.sessionStorage.setItem("dashboard-scroll-y", String(window.scrollY));
+}
+
+export default function Dashboard({ listings, initialFilters }: Props) {
   const { currentUser } = useCurrentUser();
   const { currentRentalSearchId } = useWorkspace();
-  const [search, setSearch] = useState("");
-  const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>([]);
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-  const [sort, setSort] = useState("none");
-  const [likeFilter, setLikeFilter] = useState("all");
+  const [search, setSearch] = useState(initialFilters.search);
+  const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>(
+    initialFilters.selectedNeighborhoods
+  );
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(
+    initialFilters.selectedStatuses
+  );
+  const [sort, setSort] = useState(initialFilters.sort);
+
+  useEffect(() => {
+    const savedY = window.sessionStorage.getItem("dashboard-scroll-y");
+    if (!savedY) return;
+
+    window.sessionStorage.removeItem("dashboard-scroll-y");
+    window.requestAnimationFrame(() => {
+      window.scrollTo(0, Number(savedY) || 0);
+    });
+  }, []);
+
+  useEffect(() => {
+    const query = buildDashboardQuery({
+      search,
+      selectedNeighborhoods,
+      selectedStatuses: selectedStatuses as Listing["status"][],
+      sort,
+    });
+    window.history.replaceState(null, "", query ? `/?${query}` : "/");
+  }, [search, selectedNeighborhoods, selectedStatuses, sort]);
 
   const workspaceListings = currentRentalSearchId
     ? listings.filter(
@@ -277,11 +351,9 @@ export default function Dashboard({ listings }: Props) {
 
   const filtered = workspaceListings
     .filter((listing) => {
-      const query = search.toLowerCase();
-      return (
-        listing.title.toLowerCase().includes(query) ||
-        listing.neighborhood.toLowerCase().includes(query)
-      );
+      const query = search.trim().toLowerCase();
+      if (!query) return true;
+      return searchableText(listing).includes(query);
     })
     .filter((listing) =>
       selectedNeighborhoods.length === 0
@@ -293,13 +365,6 @@ export default function Dashboard({ listings }: Props) {
         ? true
         : selectedStatuses.includes(listing.status)
     )
-    .filter((listing) => {
-      if (likeFilter === "all") return true;
-      if (likeFilter === "both") return listing.likes.length >= 2;
-      if (likeFilter === "sasha") return listing.likes.includes("Sasha");
-      if (likeFilter === "gleb") return listing.likes.includes("Gleb");
-      return true;
-    })
     .sort((a, b) => {
       if (sort === "low") return a.price - b.price;
       if (sort === "high") return b.price - a.price;
@@ -362,6 +427,23 @@ export default function Dashboard({ listings }: Props) {
   });
 
   const actionItemIds = actionItems.map((item) => item.listing.id);
+  const filteredIds = filtered.map((listing) => listing.id);
+  const dashboardQuery = buildDashboardQuery({
+    search,
+    selectedNeighborhoods,
+    selectedStatuses: selectedStatuses as Listing["status"][],
+    sort,
+  });
+  const dashboardHref = dashboardQuery ? `/?${dashboardQuery}` : "/";
+
+  function getDetailHref(listingId: string, index: number) {
+    const params = new URLSearchParams();
+    params.set("ids", filteredIds.join(","));
+    params.set("i", String(index));
+    params.set("back", dashboardHref);
+
+    return `/listing/${listingId}?${params.toString()}`;
+  }
 
   return (
     <>
@@ -373,13 +455,18 @@ export default function Dashboard({ listings }: Props) {
                 <p className="text-sm font-medium text-emerald-600">Shortlist</p>
                 <h2 className="text-2xl font-bold text-slate-900">Top Picks</h2>
                 <p className="text-sm text-slate-500">
-                  Both liked, highly rated, and not expired.
+                  Both scored, highly rated, and not expired.
                 </p>
               </div>
 
               <section className="flex gap-3 overflow-x-auto pb-2">
                 {topPicks.map((listing) => (
-                  <TopPickCompactCard key={`top-${listing.id}`} listing={listing} />
+                  <TopPickCompactCard
+                    key={`top-${listing.id}`}
+                    listing={listing}
+                    detailHref={getDetailHref(listing.id, filteredIds.indexOf(listing.id))}
+                    onOpenDetails={rememberDashboardScroll}
+                  />
                 ))}
               </section>
             </div>
@@ -401,8 +488,11 @@ export default function Dashboard({ listings }: Props) {
                     key={`action-${listing.id}`}
                     listing={listing}
                     tags={tags}
-                    needsActionIds={actionItemIds}
-                    currentIndex={index}
+                    detailHref={`${getDetailHref(
+                      listing.id,
+                      filteredIds.indexOf(listing.id)
+                    )}&na_ids=${encodeURIComponent(actionItemIds.join(","))}&na_i=${index}`}
+                    onOpenDetails={rememberDashboardScroll}
                   />
                 ))}
               </section>
@@ -420,8 +510,6 @@ export default function Dashboard({ listings }: Props) {
         setSelectedStatuses={setSelectedStatuses}
         sort={sort}
         setSort={setSort}
-        likeFilter={likeFilter}
-        setLikeFilter={setLikeFilter}
       />
 
       <p className="mb-4 text-sm text-slate-500">
@@ -433,7 +521,12 @@ export default function Dashboard({ listings }: Props) {
       ) : (
         <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((listing) => (
-            <ListingCard key={listing.id} listing={listing} />
+            <ListingCard
+              key={listing.id}
+              listing={listing}
+              detailHref={getDetailHref(listing.id, filteredIds.indexOf(listing.id))}
+              onOpenDetails={rememberDashboardScroll}
+            />
           ))}
         </section>
       )}

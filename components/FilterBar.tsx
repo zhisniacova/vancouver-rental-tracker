@@ -12,8 +12,6 @@ type Props = {
   setSelectedStatuses: (value: string[]) => void;
   sort: string;
   setSort: (value: string) => void;
-  likeFilter: string;
-  setLikeFilter: (value: string) => void;
 };
 
 type MultiSelectPopoverProps = {
@@ -102,8 +100,6 @@ export default function FilterBar({
   setSelectedStatuses,
   sort,
   setSort,
-  likeFilter,
-  setLikeFilter,
 }: Props) {
   const { neighborhoods } = useNeighborhoodOptions();
 
@@ -128,7 +124,7 @@ export default function FilterBar({
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by title or neighborhood"
+          placeholder="Search title, address, notes, contact, URL..."
           className={`min-w-[260px] flex-1 ${field}`}
         />
 
@@ -147,17 +143,6 @@ export default function FilterBar({
           selectedValues={selectedStatuses}
           setSelectedValues={setSelectedStatuses}
         />
-
-        <select
-          value={likeFilter}
-          onChange={(e) => setLikeFilter(e.target.value)}
-          className={field}
-        >
-          <option value="all">All likes</option>
-          <option value="both">Both liked</option>
-          <option value="sasha">Liked by Sasha</option>
-          <option value="gleb">Liked by Gleb</option>
-        </select>
 
         <select
           value={sort}

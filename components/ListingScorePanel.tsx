@@ -27,7 +27,6 @@ export default function ListingScorePanel({
     setIsSaving(true);
 
     const scoreValue = value === "" ? null : Number(value);
-    const userName = field === "sasha_score" ? "Sasha" : "Gleb";
 
     const { error } = await supabase
       .from("listings")
@@ -39,30 +38,6 @@ export default function ListingScorePanel({
       alert(`Error updating score: ${error.message}`);
       setIsSaving(false);
       return;
-    }
-
-    if (scoreValue !== null && scoreValue > 5) {
-      const { data: existingLike, error: likeCheckError } = await supabase
-        .from("listing_likes")
-        .select("listing_id")
-        .eq("listing_id", listingId)
-        .eq("user_name", userName)
-        .maybeSingle();
-
-      if (likeCheckError) {
-        console.error("Error checking existing like:", likeCheckError);
-      } else if (!existingLike) {
-        const { error: likeInsertError } = await supabase.from("listing_likes").insert([
-          {
-            listing_id: listingId,
-            user_name: userName,
-          },
-        ]);
-
-        if (likeInsertError) {
-          console.error("Error auto-liking after score update:", likeInsertError);
-        }
-      }
     }
 
     router.refresh();

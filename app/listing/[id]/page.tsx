@@ -1,13 +1,54 @@
 import Link from "next/link";
 import StatusBadge from "@/components/StatusBadge";
 import MessageHistory from "@/components/MessageHistory";
-import ListingScorePanel from "@/components/ListingScorePanel";
+import ListingQuickEditPanel from "@/components/ListingQuickEditPanel";
 import NeedsActionNavigator from "@/components/NeedsActionNavigator";
 import { getAuthenticatedSupabaseClient } from "@/lib/auth";
 
 type ListingPageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
+
+function getFirstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function parseListingIds(rawIds: string | undefined) {
+  if (!rawIds) return [];
+
+  return rawIds
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function normalizeBackHref(value: string | undefined) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "/";
+  }
+
+  return value;
+}
+
+function buildBrowseHref({
+  listingId,
+  index,
+  ids,
+  backHref,
+}: {
+  listingId: string;
+  index: number;
+  ids: string[];
+  backHref: string;
+}) {
+  const params = new URLSearchParams();
+  params.set("ids", ids.join(","));
+  params.set("i", String(index));
+  params.set("back", backHref);
+
+  return `/listing/${listingId}?${params.toString()}`;
+}
 
 async function getListingDetails(id: string) {
   const { supabase } = await getAuthenticatedSupabaseClient();
@@ -22,16 +63,6 @@ async function getListingDetails(id: string) {
     return null;
   }
 
-  const { data: likes, error: likesError } = await supabase
-    .from("listing_likes")
-    .select("*")
-    .eq("listing_id", id)
-    .order("created_at", { ascending: true });
-
-  if (likesError) {
-    console.error("Error fetching likes:", likesError);
-  }
-
   const { data: messages, error: messagesError } = await supabase
     .from("listing_messages")
     .select("*")
@@ -44,7 +75,6 @@ async function getListingDetails(id: string) {
 
   return {
     listing,
-    likes: likes ?? [],
     messages: messages ?? [],
   };
 }
@@ -62,8 +92,12 @@ function getAverageScore(listing: {
   return scores.reduce((sum, score) => sum + score, 0) / scores.length;
 }
 
-export default async function ListingDetailsPage({ params }: ListingPageProps) {
+export default async function ListingDetailsPage({
+  params,
+  searchParams,
+}: ListingPageProps) {
   const { id } = await params;
+  const query = await searchParams;
   const data = await getListingDetails(id);
 
   if (!data) {
@@ -77,8 +111,33 @@ export default async function ListingDetailsPage({ params }: ListingPageProps) {
     );
   }
 
-  const { listing, likes, messages } = data;
+  const { listing, messages } = data;
   const averageScore = getAverageScore(listing);
+  const ids = parseListingIds(getFirstParam(query.ids));
+  const parsedIndex = Number(getFirstParam(query.i) ?? "");
+  const currentIndex =
+    Number.isInteger(parsedIndex) && ids[parsedIndex] === listing.id
+      ? parsedIndex
+      : ids.indexOf(listing.id);
+  const backHref = normalizeBackHref(getFirstParam(query.back));
+  const previousHref =
+    currentIndex > 0
+      ? buildBrowseHref({
+          listingId: ids[currentIndex - 1],
+          index: currentIndex - 1,
+          ids,
+          backHref,
+        })
+      : null;
+  const nextHref =
+    currentIndex >= 0 && currentIndex < ids.length - 1
+      ? buildBrowseHref({
+          listingId: ids[currentIndex + 1],
+          index: currentIndex + 1,
+          ids,
+          backHref,
+        })
+      : null;
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8">
@@ -94,7 +153,7 @@ export default async function ListingDetailsPage({ params }: ListingPageProps) {
           <div className="flex flex-wrap gap-2">
             <NeedsActionNavigator currentListingId={listing.id} />
             <Link
-              href="/"
+              href={backHref}
               className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
             >
               Back to dashboard
@@ -114,11 +173,50 @@ export default async function ListingDetailsPage({ params }: ListingPageProps) {
           </div>
         </div>
 
+        {(previousHref || nextHref) && (
+          <nav className="mb-6 flex flex-col gap-2 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-500">
+              Listing {currentIndex + 1} of {ids.length}
+            </p>
+            <div className="flex gap-2">
+              {previousHref ? (
+                <Link
+                  href={previousHref}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  Previous
+                </Link>
+              ) : (
+                <span className="rounded-xl border border-slate-100 px-4 py-2 text-sm font-medium text-slate-300">
+                  Previous
+                </span>
+              )}
+              {nextHref ? (
+                <Link
+                  href={nextHref}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  Next
+                </Link>
+              ) : (
+                <span className="rounded-xl border border-slate-100 px-4 py-2 text-sm font-medium text-slate-300">
+                  Next
+                </span>
+              )}
+            </div>
+          </nav>
+        )}
+
         <div className="mb-6">
-          <ListingScorePanel
+          <ListingQuickEditPanel
             listingId={listing.id}
+            viewingDate={listing.viewing_date}
+            status={listing.status}
             sashaScore={listing.sasha_score}
             glebScore={listing.gleb_score}
+            comments={listing.comments}
+            pros={listing.pros}
+            cons={listing.cons}
           />
         </div>
 
@@ -188,6 +286,12 @@ export default async function ListingDetailsPage({ params }: ListingPageProps) {
                   <p className="font-medium text-slate-700">{listing.gym || "—"}</p>
                 </div>
                 <div>
+                  <p className="text-sm text-slate-400">Pets</p>
+                  <p className="font-medium text-slate-700">
+                    {listing.pet_policy || "—"}
+                  </p>
+                </div>
+                <div>
                   <p className="text-sm text-slate-400">Added by</p>
                   <p className="font-medium text-slate-700">{listing.added_by || "—"}</p>
                 </div>
@@ -207,12 +311,6 @@ export default async function ListingDetailsPage({ params }: ListingPageProps) {
                   <p className="text-sm text-slate-400">Avg score</p>
                   <p className="font-medium text-slate-700">
                     {averageScore !== null ? averageScore.toFixed(1) : "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-slate-400">Likes</p>
-                  <p className="font-medium text-slate-700">
-                    {likes.length > 0 ? likes.map((like) => like.user_name).join(", ") : "—"}
                   </p>
                 </div>
               </div>
@@ -247,6 +345,18 @@ export default async function ListingDetailsPage({ params }: ListingPageProps) {
                 <div>
                   <p className="text-sm text-slate-400">Phone</p>
                   <p className="font-medium text-slate-700">{listing.contact_phone || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-400">Contact medium</p>
+                  <p className="font-medium text-slate-700">
+                    {listing.contact_medium || "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-400">Other contact details</p>
+                  <p className="whitespace-pre-wrap font-medium text-slate-700">
+                    {listing.contact_details || "—"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-400">Location</p>
