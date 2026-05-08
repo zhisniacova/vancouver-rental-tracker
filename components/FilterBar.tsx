@@ -46,8 +46,8 @@ function MultiSelectPopover({
   }
 
   return (
-    <details className="group relative min-w-[220px] [&_summary::-webkit-details-marker]:hidden">
-      <summary className="flex cursor-pointer list-none items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2 text-slate-900 outline-none transition hover:border-slate-300">
+    <details className="group relative w-full sm:min-w-[220px] sm:w-auto [&_summary::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition hover:border-slate-300 sm:py-2">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-400">{label}</p>
           <p className="text-sm font-medium text-slate-700">{selectedLabel}</p>
@@ -55,7 +55,7 @@ function MultiSelectPopover({
         <span className="text-xs text-slate-500 transition group-open:rotate-180">▾</span>
       </summary>
 
-      <div className="absolute left-0 z-20 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg">
+      <div className="absolute left-0 z-20 mt-2 w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white p-2 shadow-lg sm:w-72">
         <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
           {options.map((option) => {
             const checked = selectedValues.includes(option.value);
@@ -104,7 +104,7 @@ export default function FilterBar({
   const { neighborhoods } = useNeighborhoodOptions();
 
   const field =
-    "rounded-xl border border-slate-200 px-4 py-2 text-slate-900 bg-white outline-none focus:border-slate-400";
+    "rounded-xl border border-slate-200 px-4 py-3 sm:py-2 text-slate-900 bg-white outline-none focus:border-slate-400";
 
   const statusOptions = [
     "to_process",
@@ -130,7 +130,7 @@ export default function FilterBar({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search title, address, notes, contact, URL..."
-          className={`min-w-[260px] flex-1 ${field}`}
+          className={`min-w-0 flex-1 ${field}`}
         />
 
         <MultiSelectPopover
@@ -152,7 +152,7 @@ export default function FilterBar({
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value)}
-          className={field}
+          className={`w-full lg:w-auto ${field}`}
         >
           <option value="none">Sort</option>
           <option value="low">Price ↑</option>

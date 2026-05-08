@@ -27,7 +27,7 @@ export default function ListingImageGallery({ images, title }: Props) {
       <button
         type="button"
         onClick={() => setIsLightboxOpen(true)}
-        className="block aspect-[16/10] w-full overflow-hidden rounded-xl bg-slate-200"
+        className="block aspect-[4/3] w-full overflow-hidden rounded-xl bg-slate-200 sm:aspect-[16/10]"
       >
         <img
           src={selectedImage}
@@ -64,7 +64,7 @@ export default function ListingImageGallery({ images, title }: Props) {
           <button
             type="button"
             onClick={() => setIsLightboxOpen(false)}
-            className="absolute right-4 top-4 rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-slate-900"
+            className="absolute right-4 top-4 rounded-full bg-white/90 px-4 py-3 text-sm font-semibold text-slate-900 sm:py-2"
           >
             Close
           </button>

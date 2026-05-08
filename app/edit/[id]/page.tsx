@@ -27,9 +27,11 @@ export default async function EditPage({ params }: EditPageProps) {
 
   if (!listing) {
     return (
-      <main className="min-h-screen bg-slate-50 px-6 py-8">
+      <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 sm:py-8">
         <div className="mx-auto max-w-6xl">
-          <h1 className="mb-4 text-3xl font-bold text-slate-900">Edit Listing</h1>
+          <h1 className="mb-4 text-2xl font-bold text-slate-900 sm:text-3xl">
+            Edit Listing
+          </h1>
           <p className="text-slate-600">Listing not found.</p>
         </div>
       </main>
@@ -37,9 +39,11 @@ export default async function EditPage({ params }: EditPageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-8">
+    <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 sm:py-8">
       <div className="mx-auto max-w-6xl">
-        <h1 className="mb-6 text-3xl font-bold text-slate-900">Edit Listing</h1>
+        <h1 className="mb-6 text-2xl font-bold text-slate-900 sm:text-3xl">
+          Edit Listing
+        </h1>
         <ListingForm existingListing={listing} />
       </div>
     </main>

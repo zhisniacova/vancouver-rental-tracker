@@ -137,7 +137,7 @@ export default function ListingQuickEditPanel({
             value={localViewingDate}
             onChange={(event) => handleViewingDateChange(event.target.value)}
             disabled={isSaving}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60"
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-base text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60 sm:py-2 sm:text-sm"
           />
         </label>
 
@@ -151,7 +151,7 @@ export default function ListingQuickEditPanel({
               handleStatusChange(event.target.value as ListingStatus)
             }
             disabled={isSaving}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60"
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-base text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60 sm:py-2 sm:text-sm"
           >
             {STATUS_OPTIONS.map((option) => (
               <option key={option} value={option}>
@@ -172,7 +172,7 @@ export default function ListingQuickEditPanel({
                 handleScoreChange("sasha_score", event.target.value)
               }
               disabled={isSaving}
-              className={`w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60 ${
+              className={`w-full rounded-xl border bg-white px-3 py-3 text-base text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60 sm:py-2 sm:text-sm ${
                 currentUser === "Sasha" ? "border-blue-300" : "border-slate-200"
               }`}
             >
@@ -195,7 +195,7 @@ export default function ListingQuickEditPanel({
                 handleScoreChange("gleb_score", event.target.value)
               }
               disabled={isSaving}
-              className={`w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60 ${
+              className={`w-full rounded-xl border bg-white px-3 py-3 text-base text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60 sm:py-2 sm:text-sm ${
                 currentUser === "Gleb" ? "border-blue-300" : "border-slate-200"
               }`}
             >
