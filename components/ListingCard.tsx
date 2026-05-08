@@ -239,7 +239,7 @@ export default function ListingCard({
   const isToProcess = listing.status === "to_process";
 
   return (
-    <article className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+    <article className="min-w-0 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
       <div className="relative h-48 overflow-hidden rounded-t-2xl bg-slate-200">
         <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
           {averageScore !== null && (
@@ -277,10 +277,10 @@ export default function ListingCard({
         )}
       </div>
 
-      <div className="p-5">
+      <div className="p-4 sm:p-5">
         <div className="mb-3">
           <div className="min-w-0 flex-1">
-            <h2 className="h-12 overflow-hidden text-lg font-semibold leading-6 text-slate-900">
+            <h2 className="line-clamp-2 min-h-12 overflow-hidden text-lg font-semibold leading-6 text-slate-900">
               {listing.title}
             </h2>
             <p className="truncate text-sm text-slate-500">{listing.neighborhood}</p>
@@ -404,11 +404,11 @@ export default function ListingCard({
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {isToProcess ? (
             <Link
               href={`/edit/${listing.id}`}
-              className="rounded-xl border border-violet-200 bg-violet-50 py-2 text-center text-sm font-medium text-violet-700 hover:bg-violet-100"
+              className="rounded-xl border border-violet-200 bg-violet-50 py-3 text-center text-sm font-medium text-violet-700 hover:bg-violet-100 sm:py-2"
             >
               Process
             </Link>
@@ -416,7 +416,7 @@ export default function ListingCard({
             <Link
               href={resolvedDetailHref}
               onClick={onOpenDetails}
-              className="rounded-xl border border-slate-200 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
+              className="rounded-xl border border-slate-200 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-100 sm:py-2"
             >
               View
             </Link>
@@ -424,16 +424,16 @@ export default function ListingCard({
 
           <Link
             href={`/message/${listing.id}`}
-            className="rounded-xl border border-blue-200 bg-blue-50 py-2 text-center text-sm font-medium text-blue-700 hover:bg-blue-100"
+            className="rounded-xl border border-blue-200 bg-blue-50 py-3 text-center text-sm font-medium text-blue-700 hover:bg-blue-100 sm:py-2"
           >
             Message
           </Link>
 
-          <details className="group relative [&_summary::-webkit-details-marker]:hidden">
-            <summary className="cursor-pointer list-none rounded-xl border border-slate-200 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-100">
+          <details className="group relative col-span-2 sm:col-span-1 [&_summary::-webkit-details-marker]:hidden">
+            <summary className="cursor-pointer list-none rounded-xl border border-slate-200 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-100 sm:py-2">
               More
             </summary>
-            <div className="absolute bottom-full right-0 z-20 mb-2 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-sm shadow-lg">
+            <div className="absolute bottom-full right-0 z-20 mb-2 w-full min-w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-sm shadow-lg sm:w-44">
               {listing.url && (
                 <a
                   href={listing.url}

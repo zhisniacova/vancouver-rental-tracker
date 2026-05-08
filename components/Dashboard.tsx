@@ -135,7 +135,7 @@ function TopPickCompactCard({
   const recentlyAdded = isRecentlyAdded(listing.createdAt) && !hasBothScores(listing);
 
   return (
-    <article className="w-64 flex-none overflow-hidden rounded-xl bg-white ring-1 ring-emerald-200">
+    <article className="w-[calc(100vw-3rem)] max-w-64 flex-none overflow-hidden rounded-xl bg-white ring-1 ring-emerald-200">
       <div className="relative h-28 bg-slate-200">
         {recentlyAdded && (
           <div className="absolute left-2 top-2 z-10 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm">
@@ -169,7 +169,7 @@ function TopPickCompactCard({
 
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-bold text-slate-900">
-            ${listing.price.toLocaleString()}
+            {listing.price > 0 ? `$${listing.price.toLocaleString()}` : "Price unknown"}
           </p>
           {averageScore > 0 && (
             <p className="text-xs font-medium text-slate-600">
@@ -210,7 +210,7 @@ function NeedsActionCompactCard({
   onOpenDetails: () => void;
 }) {
   return (
-    <article className="w-72 flex-none overflow-hidden rounded-xl bg-white ring-1 ring-amber-200">
+    <article className="w-[calc(100vw-3rem)] max-w-72 flex-none overflow-hidden rounded-xl bg-white ring-1 ring-amber-200">
       <div className="relative h-28 bg-slate-200">
         {listing.coverImageUrl ? (
           <img
@@ -381,13 +381,18 @@ function ToProcessQueue({
   }
 
   return (
-    <section className="mb-8 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-violet-200">
+    <section
+      id="quick-save-url"
+      className="mb-8 scroll-mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-violet-200 sm:p-5"
+    >
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-sm font-medium text-violet-600">Inbox</p>
-          <h2 className="text-2xl font-bold text-slate-900">To Process</h2>
+          <h2 className="text-2xl font-bold text-slate-900">
+            Quick save URL
+          </h2>
           <p className="text-sm text-slate-500">
-            Save links fast now, autofill and review details later.
+            Paste a rental link now. It lands in To Process for autofill later.
           </p>
         </div>
         <p className="text-sm text-slate-500">
@@ -408,12 +413,12 @@ function ToProcessQueue({
           value={url}
           onChange={(event) => setUrl(event.target.value)}
           placeholder="Paste listing URL to process later"
-          className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400"
+          className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 outline-none focus:border-slate-400 sm:text-sm"
         />
         <button
           type="submit"
           disabled={isSaving || isLoadingWorkspaces || !currentRentalSearchId}
-          className="rounded-xl bg-violet-700 px-5 py-3 text-sm font-medium text-white hover:bg-violet-600 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-xl bg-violet-700 px-5 py-3 text-sm font-medium text-white hover:bg-violet-600 disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-32"
         >
           {isSaving ? "Saving..." : "Save URL"}
         </button>
@@ -426,39 +431,51 @@ function ToProcessQueue({
       )}
 
       {listings.length > 0 ? (
-        <div className="grid gap-3 md:grid-cols-2">
-          {listings.map((listing) => (
-            <article
-              key={`to-process-${listing.id}`}
-              className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-semibold text-slate-900">
-                  {listing.title || "Unprocessed listing"}
-                </p>
-                <p className="truncate text-sm text-slate-500">{listing.url}</p>
-              </div>
-              <div className="flex shrink-0 gap-2">
-                <Link
-                  href={`/edit/${listing.id}`}
-                  className="rounded-lg bg-violet-700 px-3 py-2 text-sm font-medium text-white hover:bg-violet-600"
-                >
-                  Process
-                </Link>
-                {listing.url && (
-                  <a
-                    href={listing.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+        <>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-slate-900">
+              To Process
+            </h3>
+            <span className="rounded-full bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700">
+              {listings.length}
+            </span>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {listings.map((listing) => (
+              <article
+                key={`to-process-${listing.id}`}
+                className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-slate-900">
+                    {listing.title || "Unprocessed listing"}
+                  </p>
+                  <p className="truncate text-sm text-slate-500">
+                    {listing.url}
+                  </p>
+                </div>
+                <div className="grid shrink-0 grid-cols-2 gap-2 sm:flex">
+                  <Link
+                    href={`/edit/${listing.id}`}
+                    className="rounded-lg bg-violet-700 px-3 py-2 text-center text-sm font-medium text-white hover:bg-violet-600"
                   >
-                    Open
-                  </a>
-                )}
-              </div>
-            </article>
-          ))}
-        </div>
+                    Process
+                  </Link>
+                  {listing.url && (
+                    <a
+                      href={listing.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
+                    >
+                      Open
+                    </a>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        </>
       ) : (
         <p className="text-sm text-slate-500">No saved links waiting.</p>
       )}
@@ -617,7 +634,7 @@ export default function Dashboard({ listings, initialFilters }: Props) {
       {(topPicks.length > 0 || actionItems.length > 0) && (
         <section className="mb-8 space-y-6">
           {topPicks.length > 0 && (
-            <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-emerald-200">
+            <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-emerald-200 sm:p-5">
               <div className="mb-4">
                 <p className="text-sm font-medium text-emerald-600">Shortlist</p>
                 <h2 className="text-2xl font-bold text-slate-900">Top Picks</h2>
@@ -640,7 +657,7 @@ export default function Dashboard({ listings, initialFilters }: Props) {
           )}
 
           {actionItems.length > 0 && (
-            <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-amber-200">
+            <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-amber-200 sm:p-5">
               <div className="mb-4">
                 <p className="text-sm font-medium text-amber-600">Next step</p>
                 <h2 className="text-2xl font-bold text-slate-900">Needs Action</h2>
