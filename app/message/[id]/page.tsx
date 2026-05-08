@@ -21,9 +21,27 @@ async function getListing(id: string) {
   return data;
 }
 
+async function getProfile(userId: string) {
+  const { supabase } = await getAuthenticatedSupabaseClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("full_name, phone_number, about_us, default_message_template")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error fetching profile for messaging:", error);
+    return null;
+  }
+
+  return data;
+}
+
 export default async function MessagePage({ params }: MessagePageProps) {
   const { id } = await params;
+  const { user } = await getAuthenticatedSupabaseClient();
   const listing = await getListing(id);
+  const profile = await getProfile(user.id);
 
   if (!listing) {
     return (
@@ -44,7 +62,11 @@ export default async function MessagePage({ params }: MessagePageProps) {
           <h1 className="text-3xl font-bold text-slate-900">Message Listing</h1>
         </div>
 
-        <MessageComposer listing={listing} />
+        <MessageComposer
+          listing={listing}
+          profile={profile}
+          accountEmail={user.email ?? ""}
+        />
       </div>
     </main>
   );

@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import {
+  DEFAULT_ABOUT_US,
+  DEFAULT_MESSAGE_TEMPLATE,
+  renderMessageTemplate,
+} from "@/lib/messageTemplate";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "./CurrentUserProvider";
 
@@ -21,6 +26,15 @@ type ListingRecord = {
 
 type Props = {
   listing: ListingRecord;
+  profile: MessageProfile | null;
+  accountEmail: string;
+};
+
+type MessageProfile = {
+  full_name: string | null;
+  phone_number: string | null;
+  about_us: string | null;
+  default_message_template: string | null;
 };
 
 const SENDERS = {
@@ -48,43 +62,46 @@ function buildSubject(listing: ListingRecord) {
 function buildBody({
   listing,
   senderName,
-  messageType,
+  currentUser,
   recipientName,
+  profile,
+  accountEmail,
 }: {
   listing: ListingRecord;
   senderName: SenderName;
-  messageType: MessageType;
+  currentUser: SenderName;
   recipientName: string;
+  profile: MessageProfile | null;
+  accountEmail: string;
 }) {
-  const sender = SENDERS[senderName];
-  const firstName = sender.fullName.split(" ")[0] || sender.fullName;
-  const greeting = recipientName ? `Hello ${recipientName},` : "Hello,";
-  const listingReference = listing.title
-    ? `"${listing.title}"`
-    : "your rental listing";
+  const fallbackSender = SENDERS[senderName];
+  const useProfile = senderName === currentUser;
+  const fullName =
+    useProfile && profile?.full_name ? profile.full_name : fallbackSender.fullName;
+  const senderEmail =
+    useProfile && accountEmail ? accountEmail : fallbackSender.email;
+  const senderPhone =
+    useProfile && profile?.phone_number
+      ? profile.phone_number
+      : fallbackSender.phone;
+  const template = profile?.default_message_template || DEFAULT_MESSAGE_TEMPLATE;
 
-  const contactLine =
-    messageType === "Email"
-      ? `${sender.fullName}\n${sender.email}\n${sender.phone}`
-      : `${sender.fullName}\n${sender.phone}`;
-
-  return `${greeting}
-
-I hope this message finds you well! My name is ${firstName}, and I am reaching out about ${listingReference}${listing.url ? ` (${listing.url})` : ""}.
-
-My partner and I are very interested in the place. It looks like a strong fit, and I would love to learn whether it is still available.
-
-A bit about us: we are Masters students at UBC looking for a long term rental. We are very responsible, clean, and quiet tenants, looking for a new place to call home. An ideal move in date for us would be anywhere between June 1st and June 15th. We can provide references and any other information you may need.
-
-If the listing is still available, I would be happy to arrange a viewing or answer any questions. Next week would be great if you're available!
-
-Thank you very much, and I look forward to hearing from you.
-
-Best,
-${contactLine}`;
+  return renderMessageTemplate(template, {
+    contact_name: recipientName || "there",
+    listing_title: listing.title || "your rental listing",
+    listing_url: listing.url || "original link unavailable",
+    full_name: fullName,
+    about_us: profile?.about_us || DEFAULT_ABOUT_US,
+    account_email: senderEmail,
+    phone_number: senderPhone,
+  });
 }
 
-export default function MessageComposer({ listing }: Props) {
+export default function MessageComposer({
+  listing,
+  profile,
+  accountEmail,
+}: Props) {
   const router = useRouter();
   const { currentUser } = useCurrentUser();
 
@@ -102,8 +119,10 @@ export default function MessageComposer({ listing }: Props) {
     const base = buildBody({
       listing,
       senderName,
-      messageType,
+      currentUser,
       recipientName,
+      profile,
+      accountEmail,
     });
 
     if (!customIntro.trim()) return base;
@@ -112,7 +131,15 @@ export default function MessageComposer({ listing }: Props) {
     if (lines.length < 2) return `${base}\n\n${customIntro.trim()}`;
 
     return `${lines[0]}\n\n${customIntro.trim()}\n\n${lines.slice(1).join("\n\n")}`;
-  }, [listing, senderName, messageType, recipientName, customIntro]);
+  }, [
+    listing,
+    senderName,
+    currentUser,
+    recipientName,
+    profile,
+    accountEmail,
+    customIntro,
+  ]);
   const body = bodyOverride ?? templateBody;
   const isBodyEdited = bodyOverride !== null;
   const ccEmail = senderName === "Sasha" ? SENDERS.Gleb.email : SENDERS.Sasha.email;

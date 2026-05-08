@@ -48,6 +48,7 @@ export async function updateProfile(
       nickname: getOptionalString(formData, "nickname"),
       full_name: getOptionalString(formData, "fullName"),
       phone_number: getOptionalString(formData, "phoneNumber"),
+      about_us: getOptionalString(formData, "aboutUs"),
       default_message_template: getOptionalString(
         formData,
         "defaultMessageTemplate"
@@ -118,9 +119,14 @@ export async function updateRentalPreferences(
 ): Promise<RentalPreferencesFormState> {
   const { supabase } = await getAuthenticatedSupabaseClient();
   const rentalSearchId = getOptionalString(formData, "rentalSearchId");
+  const workspaceName = getOptionalString(formData, "workspaceName");
 
   if (!rentalSearchId) {
     return { error: "Choose a workspace before saving rental preferences." };
+  }
+
+  if (!workspaceName) {
+    return { error: "Workspace name is required." };
   }
 
   const criteriaKeys = Object.keys(CRITERIA_LABELS) as CriteriaKey[];
@@ -139,7 +145,10 @@ export async function updateRentalPreferences(
 
   const { error } = await supabase
     .from("rental_searches")
-    .update({ criteria_preferences: preferences })
+    .update({
+      name: workspaceName,
+      criteria_preferences: preferences,
+    })
     .eq("id", rentalSearchId);
 
   if (error) {

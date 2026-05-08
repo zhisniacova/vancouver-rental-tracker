@@ -50,7 +50,7 @@ export default function InviteCollaborator() {
         <p className="text-sm font-medium text-slate-500">
           {currentWorkspace?.name ?? "No workspace selected"}
         </p>
-        <h2 className="text-2xl font-bold text-slate-900">Workspace</h2>
+        <h2 className="text-2xl font-bold text-slate-900">Collaborators</h2>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row">

@@ -55,7 +55,7 @@ export default function RentalPreferencesForm() {
             : currentWorkspace?.name ?? "No workspace selected"}
         </p>
         <h2 className="text-2xl font-bold text-slate-900">
-          Rental preferences
+          Search Preferences
         </h2>
       </div>
 
@@ -65,29 +65,19 @@ export default function RentalPreferencesForm() {
         value={currentWorkspace?.id ?? ""}
       />
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {criteriaKeys.map((key) => (
-          <label key={key} className="block">
-            <span className="mb-2 block text-sm font-medium text-slate-700">
-              {CRITERIA_LABELS[key]}
-            </span>
-            <select
-              name={`criteria_${key}`}
-              defaultValue={preferences.criteria[key]}
-              disabled={!currentWorkspace || pending}
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60"
-            >
-              {IMPORTANCE_LEVELS.map((level) => (
-                <option key={level} value={level}>
-                  {importanceLabels[level]}
-                </option>
-              ))}
-            </select>
-          </label>
-        ))}
-      </div>
+      <label className="mb-6 block">
+        <span className="mb-2 block text-sm font-medium text-slate-700">
+          Workspace name
+        </span>
+        <input
+          name="workspaceName"
+          defaultValue={currentWorkspace?.name ?? ""}
+          disabled={!currentWorkspace || pending}
+          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60"
+        />
+      </label>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3">
         <label className="block">
           <span className="mb-2 block text-sm font-medium text-slate-700">
             Max rent
@@ -137,6 +127,33 @@ export default function RentalPreferencesForm() {
         </label>
       </div>
 
+      <div className="mt-6">
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Criteria importance
+        </h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          {criteriaKeys.map((key) => (
+            <label key={key} className="block">
+              <span className="mb-2 block text-sm font-medium text-slate-700">
+                {CRITERIA_LABELS[key]}
+              </span>
+              <select
+                name={`criteria_${key}`}
+                defaultValue={preferences.criteria[key]}
+                disabled={!currentWorkspace || pending}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60"
+              >
+                {IMPORTANCE_LEVELS.map((level) => (
+                  <option key={level} value={level}>
+                    {importanceLabels[level]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+        </div>
+      </div>
+
       {state.error && (
         <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
           {state.error}
@@ -154,7 +171,7 @@ export default function RentalPreferencesForm() {
         disabled={!currentWorkspace || pending}
         className="mt-6 rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60"
       >
-        {pending ? "Saving..." : "Save rental preferences"}
+        {pending ? "Saving..." : "Save search preferences"}
       </button>
     </form>
   );
