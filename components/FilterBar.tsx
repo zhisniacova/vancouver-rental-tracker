@@ -106,12 +106,17 @@ export default function FilterBar({
   const field =
     "rounded-xl border border-slate-200 px-4 py-2 text-slate-900 bg-white outline-none focus:border-slate-400";
 
-  const statusOptions = ["new", "messaged", "viewing_scheduled", "viewed", "expired"].map(
-    (status) => ({
-      value: status,
-      label: formatStatusLabel(status),
-    })
-  );
+  const statusOptions = [
+    "to_process",
+    "new",
+    "messaged",
+    "viewing_scheduled",
+    "viewed",
+    "expired",
+  ].map((status) => ({
+    value: status,
+    label: formatStatusLabel(status),
+  }));
 
   const neighborhoodOptions = neighborhoods.map((name) => ({
     value: name,

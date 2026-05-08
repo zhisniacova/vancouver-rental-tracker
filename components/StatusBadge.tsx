@@ -1,4 +1,10 @@
-type ListingStatus = "new" | "messaged" | "viewing_scheduled" | "viewed" | "expired";
+type ListingStatus =
+  | "to_process"
+  | "new"
+  | "messaged"
+  | "viewing_scheduled"
+  | "viewed"
+  | "expired";
 
 type StatusBadgeProps = {
   status: ListingStatus;
@@ -13,6 +19,8 @@ export function formatStatusLabel(status: string) {
 
 function getStatusStyles(status: ListingStatus) {
   switch (status) {
+    case "to_process":
+      return "bg-violet-100 text-violet-700";
     case "new":
       return "bg-slate-100 text-slate-700";
     case "messaged":

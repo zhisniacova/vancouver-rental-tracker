@@ -1,5 +1,6 @@
 type AmenityValue = "Unknown" | "Yes" | "No";
 type ListingStatus =
+  | "to_process"
   | "new"
   | "messaged"
   | "viewing_scheduled"
@@ -459,6 +460,7 @@ function extractAvailableFromHtml(html: string, attrText: string) {
 
 function normalizeListingStatus(value: unknown): ListingStatus | "" {
   const statuses: ListingStatus[] = [
+    "to_process",
     "new",
     "messaged",
     "viewing_scheduled",

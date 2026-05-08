@@ -11,6 +11,7 @@ type HomeProps = {
 };
 
 const LISTING_STATUSES: Listing["status"][] = [
+  "to_process",
   "new",
   "messaged",
   "viewing_scheduled",

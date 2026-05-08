@@ -23,7 +23,13 @@ export type Listing = {
   furnished: string;
   moveInDate: string;
   addedBy: string;
-  status: "new" | "messaged" | "viewing_scheduled" | "viewed" | "expired";
+  status:
+    | "to_process"
+    | "new"
+    | "messaged"
+    | "viewing_scheduled"
+    | "viewed"
+    | "expired";
   comments: string;
   pros: string;
   cons: string;
@@ -52,6 +58,7 @@ type Props = {
 };
 
 const STATUS_OPTIONS: Listing["status"][] = [
+  "to_process",
   "new",
   "messaged",
   "viewing_scheduled",
@@ -105,6 +112,13 @@ function getCriteriaSymbol(signal: {
   if (signal.matched) return "✓";
   if (!signal.known) return "?";
   return signal.importance === "must-have" ? "✕" : "!";
+}
+
+function formatFurnished(value: string) {
+  if (value === "No") return "Not furnished";
+  if (value === "Yes") return "Furnished";
+  if (!value || value === "Unknown") return "Unknown furnished";
+  return value;
 }
 
 export default function ListingCard({
@@ -222,6 +236,8 @@ export default function ListingCard({
     router.refresh();
   }
 
+  const isToProcess = listing.status === "to_process";
+
   return (
     <article className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
       <div className="relative h-48 overflow-hidden rounded-t-2xl bg-slate-200">
@@ -273,7 +289,9 @@ export default function ListingCard({
 
         <div className="mb-3 space-y-2">
           <p className="text-xl font-bold text-slate-900">
-            ${listing.price.toLocaleString()}/mo
+            {listing.price > 0
+              ? `$${listing.price.toLocaleString()}/mo`
+              : "Price unknown"}
             {pricePerSqft !== null && (
               <span className="text-sm font-semibold text-slate-500">
                 {" "}• ${pricePerSqft.toFixed(2)}/sqft
@@ -299,7 +317,7 @@ export default function ListingCard({
           </div>
         </div>
 
-        {matchSummary && (
+        {matchSummary && !isToProcess && (
           <div className="mb-3 rounded-xl bg-slate-50 px-3 py-2">
             <div className="mb-1.5 flex items-center justify-between gap-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -343,7 +361,7 @@ export default function ListingCard({
 
         <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-1 text-sm font-medium text-slate-600">
           <p className="truncate">{listing.type || "—"}</p>
-          <p className="truncate">{listing.furnished || "Unknown"} furnished</p>
+          <p className="truncate">{formatFurnished(listing.furnished)}</p>
           <p className="truncate">{listing.moveInDate || "—"}</p>
           <p className="truncate">Added by {listing.addedBy || "—"}</p>
         </div>
@@ -387,13 +405,22 @@ export default function ListingCard({
         )}
 
         <div className="grid grid-cols-3 gap-2">
-          <Link
-            href={resolvedDetailHref}
-            onClick={onOpenDetails}
-            className="rounded-xl border border-slate-200 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
-          >
-            View
-          </Link>
+          {isToProcess ? (
+            <Link
+              href={`/edit/${listing.id}`}
+              className="rounded-xl border border-violet-200 bg-violet-50 py-2 text-center text-sm font-medium text-violet-700 hover:bg-violet-100"
+            >
+              Process
+            </Link>
+          ) : (
+            <Link
+              href={resolvedDetailHref}
+              onClick={onOpenDetails}
+              className="rounded-xl border border-slate-200 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
+            >
+              View
+            </Link>
+          )}
 
           <Link
             href={`/message/${listing.id}`}

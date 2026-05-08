@@ -10,6 +10,7 @@ import { useNeighborhoodOptions } from "./useNeighborhoodOptions";
 import { useWorkspace } from "./WorkspaceProvider";
 
 type ListingStatus =
+  | "to_process"
   | "new"
   | "messaged"
   | "viewing_scheduled"
@@ -259,7 +260,9 @@ export default function ListingForm({ existingListing }: Props) {
       [name]: value,
       ...(name === "viewingDate" &&
       value &&
-      (current.status === "new" || current.status === "messaged")
+      (current.status === "to_process" ||
+        current.status === "new" ||
+        current.status === "messaged")
         ? { status: "viewing_scheduled" as ListingStatus }
         : {}),
     }));
@@ -276,7 +279,7 @@ export default function ListingForm({ existingListing }: Props) {
       const status =
         data.status === "viewing_scheduled" && !viewingDate
           ? "new"
-          : data.status || current.status;
+          : data.status || (current.status === "to_process" ? "new" : current.status);
 
       return {
         ...current,
@@ -695,6 +698,9 @@ export default function ListingForm({ existingListing }: Props) {
                 onChange={handleChange}
                 className={fieldClassName}
               >
+                <option value="to_process">
+                  {formatStatusLabel("to_process")}
+                </option>
                 <option value="new">{formatStatusLabel("new")}</option>
                 <option value="messaged">{formatStatusLabel("messaged")}</option>
                 <option value="viewing_scheduled">

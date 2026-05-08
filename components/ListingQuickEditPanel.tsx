@@ -6,7 +6,13 @@ import { supabase } from "@/lib/supabase";
 import { formatStatusLabel } from "./StatusBadge";
 import { useCurrentUser } from "./CurrentUserProvider";
 
-type ListingStatus = "new" | "messaged" | "viewing_scheduled" | "viewed" | "expired";
+type ListingStatus =
+  | "to_process"
+  | "new"
+  | "messaged"
+  | "viewing_scheduled"
+  | "viewed"
+  | "expired";
 
 type Props = {
   listingId: string;
@@ -17,6 +23,7 @@ type Props = {
 };
 
 const STATUS_OPTIONS: ListingStatus[] = [
+  "to_process",
   "new",
   "messaged",
   "viewing_scheduled",
@@ -74,7 +81,10 @@ export default function ListingQuickEditPanel({
 
   async function handleViewingDateChange(value: string) {
     const nextStatus =
-      value && (localStatus === "new" || localStatus === "messaged")
+      value &&
+      (localStatus === "to_process" ||
+        localStatus === "new" ||
+        localStatus === "messaged")
         ? "viewing_scheduled"
         : localStatus;
 

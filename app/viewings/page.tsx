@@ -10,7 +10,13 @@ type ViewingListing = {
   title: string | null;
   neighborhood: string | null;
   viewing_date: string | null;
-  status: "new" | "messaged" | "viewing_scheduled" | "viewed" | "expired";
+  status:
+    | "to_process"
+    | "new"
+    | "messaged"
+    | "viewing_scheduled"
+    | "viewed"
+    | "expired";
   cover_image_url: string | null;
 };
 

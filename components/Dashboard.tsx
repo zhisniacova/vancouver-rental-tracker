@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import ListingCard, { Listing } from "./ListingCard";
 import FilterBar from "./FilterBar";
 import StatusBadge from "./StatusBadge";
+import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "./CurrentUserProvider";
 import { useWorkspace } from "./WorkspaceProvider";
 
@@ -50,6 +52,7 @@ function hasBothScores(listing: Listing) {
 }
 
 const STATUS_SORT_ORDER_NEW_TO_VIEWED: Record<Listing["status"], number> = {
+  to_process: 0,
   new: 1,
   messaged: 2,
   viewing_scheduled: 3,
@@ -62,7 +65,8 @@ const STATUS_SORT_ORDER_VIEWED_TO_NEW: Record<Listing["status"], number> = {
   viewing_scheduled: 2,
   messaged: 3,
   new: 4,
-  expired: 5,
+  to_process: 5,
+  expired: 6,
 };
 
 type ActionTag = "Review" | "Message Soon";
@@ -73,7 +77,7 @@ function getActionTagsForUser(
   currentUser: "Sasha" | "Gleb",
   duplicateUrls: Set<string>
 ): ExtendedActionTag[] {
-  if (listing.status === "expired") return [];
+  if (listing.status === "expired" || listing.status === "to_process") return [];
 
   const tags: ExtendedActionTag[] = [];
   const normalizedUrl = normalizeListingUrl(listing.url);
@@ -311,9 +315,161 @@ function rememberDashboardScroll() {
   window.sessionStorage.setItem("dashboard-scroll-y", String(window.scrollY));
 }
 
+function ToProcessQueue({
+  listings,
+  currentRentalSearchId,
+  currentWorkspaceName,
+  currentUser,
+  isLoadingWorkspaces,
+}: {
+  listings: Listing[];
+  currentRentalSearchId: string | null;
+  currentWorkspaceName: string | null;
+  currentUser: "Sasha" | "Gleb";
+  isLoadingWorkspaces: boolean;
+}) {
+  const router = useRouter();
+  const [url, setUrl] = useState("");
+  const [message, setMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function handleQuickSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const cleanedUrl = url.trim();
+
+    if (!cleanedUrl) {
+      setMessage("Paste a listing URL first.");
+      return;
+    }
+
+    if (!currentRentalSearchId) {
+      setMessage("Choose a workspace before saving a listing.");
+      return;
+    }
+
+    try {
+      new URL(cleanedUrl);
+    } catch {
+      setMessage("Paste a valid listing URL.");
+      return;
+    }
+
+    setIsSaving(true);
+    setMessage("");
+
+    const { error } = await supabase.from("listings").insert([
+      {
+        url: cleanedUrl,
+        title: "Unprocessed listing",
+        status: "to_process",
+        added_by: currentUser,
+        rental_search_id: currentRentalSearchId,
+      },
+    ]);
+
+    if (error) {
+      console.error("Error saving URL-only listing:", error);
+      setMessage(`Could not save link: ${error.message}`);
+      setIsSaving(false);
+      return;
+    }
+
+    setUrl("");
+    setMessage("Saved to To Process.");
+    setIsSaving(false);
+    router.refresh();
+  }
+
+  return (
+    <section className="mb-8 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-violet-200">
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-sm font-medium text-violet-600">Inbox</p>
+          <h2 className="text-2xl font-bold text-slate-900">To Process</h2>
+          <p className="text-sm text-slate-500">
+            Save links fast now, autofill and review details later.
+          </p>
+        </div>
+        <p className="text-sm text-slate-500">
+          {currentWorkspaceName
+            ? `Workspace: ${currentWorkspaceName}`
+            : isLoadingWorkspaces
+              ? "Loading workspace..."
+              : "No workspace selected"}
+        </p>
+      </div>
+
+      <form
+        onSubmit={handleQuickSave}
+        className="mb-4 flex flex-col gap-3 sm:flex-row"
+      >
+        <input
+          type="url"
+          value={url}
+          onChange={(event) => setUrl(event.target.value)}
+          placeholder="Paste listing URL to process later"
+          className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400"
+        />
+        <button
+          type="submit"
+          disabled={isSaving || isLoadingWorkspaces || !currentRentalSearchId}
+          className="rounded-xl bg-violet-700 px-5 py-3 text-sm font-medium text-white hover:bg-violet-600 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isSaving ? "Saving..." : "Save URL"}
+        </button>
+      </form>
+
+      {message && (
+        <p className="mb-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          {message}
+        </p>
+      )}
+
+      {listings.length > 0 ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          {listings.map((listing) => (
+            <article
+              key={`to-process-${listing.id}`}
+              className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-slate-900">
+                  {listing.title || "Unprocessed listing"}
+                </p>
+                <p className="truncate text-sm text-slate-500">{listing.url}</p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <Link
+                  href={`/edit/${listing.id}`}
+                  className="rounded-lg bg-violet-700 px-3 py-2 text-sm font-medium text-white hover:bg-violet-600"
+                >
+                  Process
+                </Link>
+                {listing.url && (
+                  <a
+                    href={listing.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    Open
+                  </a>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-slate-500">No saved links waiting.</p>
+      )}
+    </section>
+  );
+}
+
 export default function Dashboard({ listings, initialFilters }: Props) {
   const { currentUser } = useCurrentUser();
-  const { currentRentalSearchId, currentWorkspace } = useWorkspace();
+  const { currentRentalSearchId, currentWorkspace, isLoadingWorkspaces } =
+    useWorkspace();
   const [search, setSearch] = useState(initialFilters.search);
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>(
     initialFilters.selectedNeighborhoods
@@ -348,6 +504,9 @@ export default function Dashboard({ listings, initialFilters }: Props) {
         (listing) => listing.rentalSearchId === currentRentalSearchId
       )
     : listings;
+  const toProcessListings = workspaceListings.filter(
+    (listing) => listing.status === "to_process"
+  );
 
   const filtered = workspaceListings
     .filter((listing) => {
@@ -447,6 +606,14 @@ export default function Dashboard({ listings, initialFilters }: Props) {
 
   return (
     <>
+      <ToProcessQueue
+        listings={toProcessListings}
+        currentRentalSearchId={currentRentalSearchId}
+        currentWorkspaceName={currentWorkspace?.name ?? null}
+        currentUser={currentUser}
+        isLoadingWorkspaces={isLoadingWorkspaces}
+      />
+
       {(topPicks.length > 0 || actionItems.length > 0) && (
         <section className="mb-8 space-y-6">
           {topPicks.length > 0 && (
