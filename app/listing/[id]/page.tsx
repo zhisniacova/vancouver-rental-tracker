@@ -1,11 +1,20 @@
 import Link from "next/link";
+import AddToCalendarButton from "@/components/AddToCalendarButton";
 import ContactActions from "@/components/ContactActions";
+import GeocodeListingButton from "@/components/GeocodeListingButton";
 import ListingImageGallery from "@/components/ListingImageGallery";
+import ListingMapPreview from "@/components/ListingMapPreview";
 import ListingNotesPanel from "@/components/ListingNotesPanel";
 import MessageHistory from "@/components/MessageHistory";
 import ListingQuickEditPanel from "@/components/ListingQuickEditPanel";
 import NeedsActionNavigator from "@/components/NeedsActionNavigator";
 import { getAuthenticatedSupabaseClient } from "@/lib/auth";
+import {
+  formatDistanceKm,
+  formatDriveTime,
+  getCommuteSummaries,
+  type FrequentPlace,
+} from "@/lib/commute";
 import {
   getBudgetStatus,
   getCriteriaMatchSummary,
@@ -95,10 +104,43 @@ async function getListingDetails(id: string) {
     console.error("Error fetching messages:", messagesError);
   }
 
+  const { data: places, error: placesError } = listing.rental_search_id
+    ? await supabase
+        .from("rental_search_places")
+        .select(
+          "id, rental_search_id, name, address, latitude, longitude, formatted_address"
+        )
+        .eq("rental_search_id", listing.rental_search_id)
+        .order("created_at", { ascending: true })
+    : { data: [], error: null };
+
+  if (placesError) {
+    console.error("Error fetching frequent places:", placesError);
+  }
+
   return {
     listing,
     preferences: normalizeRentalPreferences(rentalSearch?.criteria_preferences),
     messages: messages ?? [],
+    places: ((places ?? []) as Array<{
+      id: string;
+      rental_search_id: string;
+      name: string;
+      address: string;
+      latitude: number | null;
+      longitude: number | null;
+      formatted_address: string | null;
+    }>).map(
+      (place): FrequentPlace => ({
+        id: place.id,
+        rentalSearchId: place.rental_search_id,
+        name: place.name,
+        address: place.address,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        formattedAddress: place.formatted_address,
+      })
+    ),
   };
 }
 
@@ -169,7 +211,9 @@ function formatDateTime(value: string | null) {
 
 function getListingImages(listing: {
   cover_image_url: string | null;
+  image_urls?: string[] | null;
 }) {
+  if (listing.image_urls?.length) return listing.image_urls.filter(Boolean);
   return listing.cover_image_url ? [listing.cover_image_url] : [];
 }
 
@@ -183,16 +227,18 @@ export default async function ListingDetailsPage({
 
   if (!data) {
     return (
-      <main className="min-h-screen bg-slate-50 px-6 py-8">
+      <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 sm:py-8">
         <div className="mx-auto max-w-5xl">
-          <h1 className="mb-4 text-3xl font-bold text-slate-900">Listing Details</h1>
+          <h1 className="mb-4 text-2xl font-bold text-slate-900 sm:text-3xl">
+            Listing Details
+          </h1>
           <p className="text-slate-600">Listing not found.</p>
         </div>
       </main>
     );
   }
 
-  const { listing, preferences, messages } = data;
+  const { listing, preferences, messages, places } = data;
   const averageScore = getAverageScore(listing);
   const pricePerSqft = getPricePerSqft(listing.price ?? 0, listing.sqft);
   const budgetStatus = getBudgetStatus(listing.price ?? 0, preferences);
@@ -209,6 +255,13 @@ export default async function ListingDetailsPage({
     (signal) => signal.points > 0
   );
   const listingImages = getListingImages(listing);
+  const commuteSummaries = getCommuteSummaries(
+    {
+      latitude: listing.latitude,
+      longitude: listing.longitude,
+    },
+    places
+  );
   const ids = parseListingIds(getFirstParam(query.ids));
   const parsedIndex = Number(getFirstParam(query.i) ?? "");
   const currentIndex =
@@ -236,13 +289,13 @@ export default async function ListingDetailsPage({
       : null;
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-8">
+    <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 sm:py-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
             <Link
               href={backHref}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-100 sm:py-2"
             >
               Back to dashboard
             </Link>
@@ -250,31 +303,31 @@ export default async function ListingDetailsPage({
           </div>
 
           {(previousHref || nextHref) && (
-            <nav className="flex items-center gap-2 text-sm">
+            <nav className="grid grid-cols-[auto_1fr_1fr] items-center gap-2 text-sm sm:flex">
               <span className="text-slate-500">
                 {currentIndex + 1} of {ids.length}
               </span>
               {previousHref ? (
                 <Link
                   href={previousHref}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-medium text-slate-700 hover:bg-slate-100"
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-center font-medium text-slate-700 hover:bg-slate-100 sm:py-2"
                 >
                   Previous
                 </Link>
               ) : (
-                <span className="rounded-xl border border-slate-100 bg-white px-3 py-2 font-medium text-slate-300">
+                <span className="rounded-xl border border-slate-100 bg-white px-3 py-3 text-center font-medium text-slate-300 sm:py-2">
                   Previous
                 </span>
               )}
               {nextHref ? (
                 <Link
                   href={nextHref}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-medium text-slate-700 hover:bg-slate-100"
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-center font-medium text-slate-700 hover:bg-slate-100 sm:py-2"
                 >
                   Next
                 </Link>
               ) : (
-                <span className="rounded-xl border border-slate-100 bg-white px-3 py-2 font-medium text-slate-300">
+                <span className="rounded-xl border border-slate-100 bg-white px-3 py-3 text-center font-medium text-slate-300 sm:py-2">
                   Next
                 </span>
               )}
@@ -282,13 +335,13 @@ export default async function ListingDetailsPage({
           )}
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-6">
           <section className="space-y-5">
-            <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+            <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-5">
               <p className="text-sm font-medium text-slate-500">
                 {listing.location || listing.neighborhood || "Address not saved"}
               </p>
-              <h1 className="mt-1 text-3xl font-bold text-slate-900">
+              <h1 className="mt-1 text-2xl font-bold leading-tight text-slate-900 sm:text-3xl">
                 {listing.title || "Untitled listing"}
               </h1>
               <p className="mt-2 text-lg font-semibold text-slate-900">
@@ -358,7 +411,53 @@ export default async function ListingDetailsPage({
               title={listing.title || "Listing image"}
             />
 
-            <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+            <ListingMapPreview
+              latitude={listing.latitude}
+              longitude={listing.longitude}
+              formattedAddress={listing.formatted_address}
+            />
+
+            {commuteSummaries.length > 0 && (
+              <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-5">
+                <div className="mb-4">
+                  <p className="text-sm font-medium text-slate-500">
+                    Location intelligence
+                  </p>
+                  <h2 className="text-xl font-semibold text-slate-900">
+                    Estimated Commutes
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Simple estimated driving time based on saved workspace
+                    places.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {commuteSummaries.map((summary) => (
+                    <div
+                      key={summary.place.id}
+                      className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-100"
+                    >
+                      <p className="font-semibold text-slate-900">
+                        {summary.place.name}
+                      </p>
+                      <p className="mt-1 text-2xl font-bold text-slate-900">
+                        {formatDriveTime(summary.estimatedDrivingMinutes)}
+                      </p>
+                      <p className="text-sm text-slate-500">
+                        {formatDistanceKm(summary.distanceKm)} estimated drive
+                      </p>
+                      <p className="mt-2 line-clamp-2 text-xs text-slate-500">
+                        {summary.place.formattedAddress ||
+                          summary.place.address}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-5">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-slate-500">Logistics</p>
@@ -374,6 +473,7 @@ export default async function ListingDetailsPage({
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {[
                   ["Type", listing.listing_type || "—"],
+                  ["Address", listing.formatted_address || listing.location || "—"],
                   ["Furnished", listing.furnished || "—"],
                   ["Move-in", listing.earliest_move_in || "—"],
                   ["Sqft", listing.sqft?.toLocaleString() || "—"],
@@ -406,7 +506,7 @@ export default async function ListingDetailsPage({
               cons={listing.cons}
             />
 
-            <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+            <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-5">
               <details>
                 <summary className="cursor-pointer list-none text-lg font-semibold text-slate-900">
                   Original Listing Details
@@ -431,7 +531,7 @@ export default async function ListingDetailsPage({
               <div className="grid gap-2">
                 <Link
                   href={`/message/${listing.id}`}
-                  className="rounded-xl bg-slate-900 px-4 py-2 text-center text-sm font-medium text-white hover:bg-slate-700"
+                  className="rounded-xl bg-slate-900 px-4 py-3 text-center text-sm font-medium text-white hover:bg-slate-700 sm:py-2"
                 >
                   Message
                 </Link>
@@ -440,17 +540,41 @@ export default async function ListingDetailsPage({
                     href={listing.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded-xl border border-slate-200 px-4 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    className="rounded-xl border border-slate-200 px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50 sm:py-2"
                   >
                     Open original
                   </a>
                 )}
                 <Link
                   href={`/edit/${listing.id}`}
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  className="rounded-xl border border-slate-200 px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50 sm:py-2"
                 >
                   Edit full listing
                 </Link>
+                <GeocodeListingButton
+                  listingId={listing.id}
+                  address={listing.location || listing.formatted_address}
+                  label={
+                    typeof listing.latitude === "number" &&
+                    typeof listing.longitude === "number"
+                      ? "Refresh map"
+                      : "Find on map"
+                  }
+                />
+                {listing.viewing_date && (
+                  <AddToCalendarButton
+                    listingId={listing.id}
+                    title={listing.title}
+                    viewingDate={listing.viewing_date}
+                    location={listing.formatted_address || listing.location}
+                    listingUrl={listing.url}
+                    contactName={listing.contact_name}
+                    contactEmail={listing.contact_email}
+                    contactPhone={listing.contact_phone}
+                    notes={listing.comments}
+                    status={listing.status}
+                  />
+                )}
               </div>
             </div>
 
@@ -479,7 +603,7 @@ export default async function ListingDetailsPage({
               </div>
               <ContactActions
                 email={listing.contact_email}
-                location={listing.location}
+                location={listing.formatted_address || listing.location}
               />
             </section>
           </aside>

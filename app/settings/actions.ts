@@ -3,6 +3,7 @@
 import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedSupabaseClient } from "@/lib/auth";
+import { geocodeAddress } from "@/lib/geocoding";
 import {
   CRITERIA_LABELS,
   DEFAULT_RENTAL_PREFERENCES,
@@ -24,6 +25,11 @@ export type InviteLinkResult = {
 };
 
 export type RentalPreferencesFormState = {
+  error?: string;
+  message?: string;
+};
+
+export type FrequentPlaceFormState = {
   error?: string;
   message?: string;
 };
@@ -158,4 +164,69 @@ export async function updateRentalPreferences(
   revalidatePath("/");
   revalidatePath("/settings");
   return { message: "Rental preferences saved." };
+}
+
+export async function addFrequentPlace(
+  _prevState: FrequentPlaceFormState,
+  formData: FormData
+): Promise<FrequentPlaceFormState> {
+  const { supabase } = await getAuthenticatedSupabaseClient();
+  const rentalSearchId = getOptionalString(formData, "rentalSearchId");
+  const name = getOptionalString(formData, "placeName");
+  const address = getOptionalString(formData, "placeAddress");
+
+  if (!rentalSearchId) {
+    return { error: "Choose a workspace before adding a frequent place." };
+  }
+
+  if (!name || !address) {
+    return { error: "Add both a place name and address." };
+  }
+
+  try {
+    const geocoded = await geocodeAddress(address);
+    const { error } = await supabase.from("rental_search_places").insert([
+      {
+        rental_search_id: rentalSearchId,
+        name,
+        address,
+        latitude: geocoded.latitude,
+        longitude: geocoded.longitude,
+        formatted_address: geocoded.formattedAddress,
+        geocoded_at: new Date().toISOString(),
+      },
+    ]);
+
+    if (error) {
+      return { error: error.message };
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return { error: message };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/settings");
+  return { message: "Frequent place added." };
+}
+
+export async function deleteFrequentPlace(placeId: string) {
+  const { supabase } = await getAuthenticatedSupabaseClient();
+
+  if (!placeId) {
+    return { error: "Missing place id." };
+  }
+
+  const { error } = await supabase
+    .from("rental_search_places")
+    .delete()
+    .eq("id", placeId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/settings");
+  return { message: "Frequent place deleted." };
 }

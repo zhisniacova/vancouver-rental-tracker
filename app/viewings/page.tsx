@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AddToCalendarButton from "@/components/AddToCalendarButton";
 import AppHeader from "@/components/AppHeader";
 import StatusBadge from "@/components/StatusBadge";
 import { getAuthenticatedSupabaseClient } from "@/lib/auth";
@@ -9,6 +10,13 @@ type ViewingListing = {
   id: string;
   title: string | null;
   neighborhood: string | null;
+  location: string | null;
+  formatted_address: string | null;
+  url: string | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  comments: string | null;
   viewing_date: string | null;
   status:
     | "to_process"
@@ -26,7 +34,9 @@ async function getViewings(): Promise<ViewingListing[]> {
   const { supabase } = await getAuthenticatedSupabaseClient();
   const { data, error } = await supabase
     .from("listings")
-    .select("id, title, neighborhood, viewing_date, status, cover_image_url")
+    .select(
+      "id, title, neighborhood, location, formatted_address, url, contact_name, contact_email, contact_phone, comments, viewing_date, status, cover_image_url"
+    )
     .not("viewing_date", "is", null)
     .order("viewing_date", { ascending: true });
 
@@ -121,43 +131,62 @@ function renderViewingList(grouped: Record<string, ViewingListing[]>, dates: str
 
           <div className="space-y-3">
             {grouped[dateKey].map((viewing) => (
-              <Link
+              <article
                 key={viewing.id}
-                href={`/listing/${viewing.id}`}
                 className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-slate-100 sm:flex-row sm:items-center"
               >
-                <div className="flex w-full items-center gap-4 sm:w-auto">
-                  <div className="flex h-16 w-20 items-center justify-center overflow-hidden rounded-xl bg-slate-200 text-xs text-slate-500">
-                    {viewing.cover_image_url ? (
-                      <img
-                        src={viewing.cover_image_url}
-                        alt={viewing.title || "Listing image"}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      "Photo"
-                    )}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="text-lg font-semibold text-slate-900">
-                      {formatTimeFromDateTimeKey(
-                        parseViewingDateTimeKey(viewing.viewing_date!)!
+                <Link
+                  href={`/listing/${viewing.id}`}
+                  className="flex min-w-0 flex-1 items-center gap-4"
+                >
+                  <div className="flex w-full items-center gap-4 sm:w-auto">
+                    <div className="flex h-16 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-200 text-xs text-slate-500">
+                      {viewing.cover_image_url ? (
+                        <img
+                          src={viewing.cover_image_url}
+                          alt={viewing.title || "Listing image"}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        "Photo"
                       )}
-                    </p>
-                    <p className="truncate font-medium text-slate-700">
-                      {viewing.title || "Untitled listing"}
-                    </p>
-                    <p className="text-sm text-slate-500">
-                      {viewing.neighborhood || "Unknown neighborhood"}
-                    </p>
-                  </div>
-                </div>
+                    </div>
 
-                <div className="sm:ml-auto">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-lg font-semibold text-slate-900">
+                        {formatTimeFromDateTimeKey(
+                          parseViewingDateTimeKey(viewing.viewing_date!)!
+                        )}
+                      </p>
+                      <p className="truncate font-medium text-slate-700">
+                        {viewing.title || "Untitled listing"}
+                      </p>
+                      <p className="text-sm text-slate-500">
+                        {viewing.neighborhood || "Unknown neighborhood"}
+                      </p>
+                    </div>
+                  </div>
+                </Link>
+
+                <div className="grid gap-2 sm:ml-auto sm:min-w-44">
                   <StatusBadge status={viewing.status} />
+                  <AddToCalendarButton
+                    listingId={viewing.id}
+                    title={viewing.title}
+                    viewingDate={viewing.viewing_date}
+                    location={
+                      viewing.formatted_address || viewing.location
+                    }
+                    listingUrl={viewing.url}
+                    contactName={viewing.contact_name}
+                    contactEmail={viewing.contact_email}
+                    contactPhone={viewing.contact_phone}
+                    notes={viewing.comments}
+                    status={viewing.status}
+                    className="w-full"
+                  />
                 </div>
-              </Link>
+              </article>
             ))}
           </div>
         </div>
@@ -193,7 +222,7 @@ export default async function ViewingsPage() {
   const hasAnyViewings = upcomingDates.length > 0 || pastDates.length > 0;
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-8">
+    <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 sm:py-8">
       <div className="mx-auto max-w-6xl">
         <AppHeader currentPath="/viewings" />
 

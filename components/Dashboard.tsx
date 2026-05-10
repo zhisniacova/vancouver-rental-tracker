@@ -3,10 +3,13 @@
 import { type FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import ListingCard, { Listing } from "./ListingCard";
+import ListingCard from "./ListingCard";
+import type { Listing } from "@/lib/types";
+import { getAverageScore, normalizeListingUrl } from "@/lib/listingUtils";
+import DashboardMapView from "./DashboardMapView";
 import FilterBar from "./FilterBar";
-import StatusBadge from "./StatusBadge";
 import { supabase } from "@/lib/supabase";
+import { type FrequentPlace } from "@/lib/commute";
 import { useCurrentUser } from "./CurrentUserProvider";
 import { useWorkspace } from "./WorkspaceProvider";
 
@@ -20,20 +23,11 @@ export type DashboardInitialFilters = {
 type Props = {
   listings: Listing[];
   initialFilters: DashboardInitialFilters;
+  frequentPlaces: FrequentPlace[];
 };
 
-function getAverageScore(listing: Listing) {
-  const scores = [listing.sashaScore, listing.glebScore].filter(
-    (score): score is number => score !== null && score !== undefined && score > 0
-  );
-
-  if (scores.length === 0) return 0;
-
-  return scores.reduce((sum, score) => sum + score, 0) / scores.length;
-}
-
 function isTopPick(listing: Listing) {
-  return hasBothScores(listing) && getAverageScore(listing) >= 8 && listing.status !== "expired";
+  return hasBothScores(listing) && (getAverageScore(listing) ?? 0) >= 8 && listing.status !== "expired";
 }
 
 function isRecentlyAdded(createdAt?: string | null) {
@@ -98,7 +92,7 @@ function getActionTagsForUser(
   }
 
   const needsMessaging =
-    hasBothScores(listing) && getAverageScore(listing) >= 7 && listing.status === "new";
+    hasBothScores(listing) && (getAverageScore(listing) ?? 0) >= 7 && listing.status === "new";
 
   if (needsMessaging) {
     tags.push("Message Soon");
@@ -107,19 +101,25 @@ function getActionTagsForUser(
   return tags;
 }
 
-function normalizeListingUrl(url?: string | null) {
-  if (!url) return "";
-
-  const trimmed = url.trim();
-  if (!trimmed) return "";
-
-  try {
-    const parsed = new URL(trimmed);
-    const pathname = parsed.pathname.replace(/\/+$/, "");
-    return `${parsed.origin.toLowerCase()}${pathname}${parsed.search}`;
-  } catch {
-    return trimmed.toLowerCase().replace(/\/+$/, "");
-  }
+function CompactCardPlaceholder() {
+  return (
+    <div className="flex h-full items-center justify-center bg-slate-100">
+      <svg
+        className="h-8 w-8 text-slate-300"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1}
+          d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
+        />
+      </svg>
+    </div>
+  );
 }
 
 function TopPickCompactCard({
@@ -136,7 +136,7 @@ function TopPickCompactCard({
 
   return (
     <article className="w-[calc(100vw-3rem)] max-w-64 flex-none overflow-hidden rounded-xl bg-white ring-1 ring-emerald-200">
-      <div className="relative h-28 bg-slate-200">
+      <div className="relative h-28 bg-slate-100">
         {recentlyAdded && (
           <div className="absolute left-2 top-2 z-10 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm">
             NEW
@@ -150,28 +150,23 @@ function TopPickCompactCard({
             className="h-full w-full object-cover"
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-xs text-slate-500">
-            Listing photo
-          </div>
+          <CompactCardPlaceholder />
         )}
       </div>
 
       <div className="space-y-3 p-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold text-slate-900">
-              {listing.title}
-            </h3>
-            <p className="text-xs text-slate-500">{listing.neighborhood}</p>
-          </div>
-          <StatusBadge status={listing.status} />
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-semibold text-slate-900">
+            {listing.title}
+          </h3>
+          <p className="text-xs text-slate-500">{listing.neighborhood}</p>
         </div>
 
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-bold text-slate-900">
             {listing.price > 0 ? `$${listing.price.toLocaleString()}` : "Price unknown"}
           </p>
-          {averageScore > 0 && (
+          {averageScore !== null && (
             <p className="text-xs font-medium text-slate-600">
               ⭐ {averageScore.toFixed(1)}
             </p>
@@ -211,7 +206,7 @@ function NeedsActionCompactCard({
 }) {
   return (
     <article className="w-[calc(100vw-3rem)] max-w-72 flex-none overflow-hidden rounded-xl bg-white ring-1 ring-amber-200">
-      <div className="relative h-28 bg-slate-200">
+      <div className="relative h-28 bg-slate-100">
         {listing.coverImageUrl ? (
           <img
             src={listing.coverImageUrl}
@@ -219,21 +214,16 @@ function NeedsActionCompactCard({
             className="h-full w-full object-cover"
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-xs text-slate-500">
-            Listing photo
-          </div>
+          <CompactCardPlaceholder />
         )}
       </div>
 
       <div className="space-y-3 p-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold text-slate-900">
-              {listing.title}
-            </h3>
-            <p className="text-xs text-slate-500">{listing.neighborhood}</p>
-          </div>
-          <StatusBadge status={listing.status} />
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-semibold text-slate-900">
+            {listing.title}
+          </h3>
+          <p className="text-xs text-slate-500">{listing.neighborhood}</p>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -483,7 +473,11 @@ function ToProcessQueue({
   );
 }
 
-export default function Dashboard({ listings, initialFilters }: Props) {
+export default function Dashboard({
+  listings,
+  initialFilters,
+  frequentPlaces,
+}: Props) {
   const { currentUser } = useCurrentUser();
   const { currentRentalSearchId, currentWorkspace, isLoadingWorkspaces } =
     useWorkspace();
@@ -495,6 +489,7 @@ export default function Dashboard({ listings, initialFilters }: Props) {
     initialFilters.selectedStatuses
   );
   const [sort, setSort] = useState(initialFilters.sort);
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
 
   useEffect(() => {
     const savedY = window.sessionStorage.getItem("dashboard-scroll-y");
@@ -524,6 +519,11 @@ export default function Dashboard({ listings, initialFilters }: Props) {
   const toProcessListings = workspaceListings.filter(
     (listing) => listing.status === "to_process"
   );
+  const currentFrequentPlaces = currentRentalSearchId
+    ? frequentPlaces.filter(
+        (place) => place.rentalSearchId === currentRentalSearchId
+      )
+    : frequentPlaces;
 
   const filtered = workspaceListings
     .filter((listing) => {
@@ -544,7 +544,7 @@ export default function Dashboard({ listings, initialFilters }: Props) {
     .sort((a, b) => {
       if (sort === "low") return a.price - b.price;
       if (sort === "high") return b.price - a.price;
-      if (sort === "score") return getAverageScore(b) - getAverageScore(a);
+      if (sort === "score") return (getAverageScore(b) ?? 0) - (getAverageScore(a) ?? 0);
       if (sort === "status_new_to_viewed") {
         return STATUS_SORT_ORDER_NEW_TO_VIEWED[a.status] - STATUS_SORT_ORDER_NEW_TO_VIEWED[b.status];
       }
@@ -611,6 +611,7 @@ export default function Dashboard({ listings, initialFilters }: Props) {
     sort,
   });
   const dashboardHref = dashboardQuery ? `/?${dashboardQuery}` : "/";
+  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 
   function getDetailHref(listingId: string, index: number) {
     const params = new URLSearchParams();
@@ -620,6 +621,11 @@ export default function Dashboard({ listings, initialFilters }: Props) {
 
     return `/listing/${listingId}?${params.toString()}`;
   }
+
+  const mapListings = filtered.map((listing) => ({
+    listing,
+    detailHref: getDetailHref(listing.id, filteredIds.indexOf(listing.id)),
+  }));
 
   return (
     <>
@@ -696,12 +702,47 @@ export default function Dashboard({ listings, initialFilters }: Props) {
         setSort={setSort}
       />
 
-      <p className="mb-4 text-sm text-slate-500">
-        Showing {filtered.length} of {workspaceListings.length} listings
-      </p>
+      <div className="mb-4 flex items-center justify-between gap-4 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
+        <p className="text-sm text-slate-500">
+          Showing{" "}
+          <span className="font-semibold text-slate-900">{filtered.length}</span>
+          {" "}of {workspaceListings.length}
+        </p>
+        <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1">
+          <button
+            type="button"
+            onClick={() => setViewMode("list")}
+            className={`rounded-lg px-4 py-2 text-sm font-medium ${
+              viewMode === "list"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            List
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("map")}
+            className={`rounded-lg px-4 py-2 text-sm font-medium ${
+              viewMode === "map"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            Map
+          </button>
+        </div>
+      </div>
 
       {filtered.length === 0 ? (
         <p className="text-slate-500">No listings match your filters.</p>
+      ) : viewMode === "map" ? (
+        <DashboardMapView
+          listings={mapListings}
+          preferences={currentWorkspace?.criteriaPreferences}
+          apiKey={googleMapsApiKey}
+          onOpenDetails={rememberDashboardScroll}
+        />
       ) : (
         <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((listing) => (
@@ -709,6 +750,7 @@ export default function Dashboard({ listings, initialFilters }: Props) {
               key={listing.id}
               listing={listing}
               preferences={currentWorkspace?.criteriaPreferences}
+              frequentPlaces={currentFrequentPlaces}
               detailHref={getDetailHref(listing.id, filteredIds.indexOf(listing.id))}
               onOpenDetails={rememberDashboardScroll}
             />

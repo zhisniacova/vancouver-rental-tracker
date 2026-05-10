@@ -1,8 +1,9 @@
 import Dashboard from "@/components/Dashboard";
 import type { DashboardInitialFilters } from "@/components/Dashboard";
-import type { Listing } from "@/components/ListingCard";
+import type { Listing } from "@/lib/types";
 import AppHeader from "@/components/AppHeader";
 import { getAuthenticatedSupabaseClient } from "@/lib/auth";
+import { type FrequentPlace } from "@/lib/commute";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +54,9 @@ async function getListings(): Promise<Listing[]> {
   const { supabase } = await getAuthenticatedSupabaseClient();
   const { data: listings, error: listingsError } = await supabase
     .from("listings")
-    .select("*")
+    .select(
+      "id, title, price, neighborhood, location, listing_type, furnished, earliest_move_in, added_by, status, comments, pros, cons, raw_description, contact_name, contact_email, url, sqft, parking, storage_locker, gym, in_suite_washer, pet_policy, cover_image_url, image_urls, created_at, sasha_score, gleb_score, rental_search_id, latitude, longitude, formatted_address"
+    )
     .order("created_at", { ascending: false });
 
   if (listingsError) {
@@ -86,22 +89,56 @@ async function getListings(): Promise<Listing[]> {
     inSuiteWasher: item.in_suite_washer ?? "Unknown",
     petPolicy: item.pet_policy ?? "Unknown",
     coverImageUrl: item.cover_image_url ?? null,
+    imageUrls: item.image_urls ?? null,
     createdAt: item.created_at ?? null,
     sashaScore: item.sasha_score ?? 0,
     glebScore: item.gleb_score ?? 0,
     rentalSearchId: item.rental_search_id ?? null,
+    latitude: item.latitude ?? null,
+    longitude: item.longitude ?? null,
+    formattedAddress: item.formatted_address ?? null,
+  }));
+}
+
+async function getFrequentPlaces(): Promise<FrequentPlace[]> {
+  const { supabase } = await getAuthenticatedSupabaseClient();
+  const { data, error } = await supabase
+    .from("rental_search_places")
+    .select(
+      "id, rental_search_id, name, address, latitude, longitude, formatted_address"
+    )
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching frequent places:", error);
+    return [];
+  }
+
+  return (data ?? []).map((place) => ({
+    id: place.id,
+    rentalSearchId: place.rental_search_id,
+    name: place.name,
+    address: place.address,
+    latitude: place.latitude ?? null,
+    longitude: place.longitude ?? null,
+    formattedAddress: place.formatted_address ?? null,
   }));
 }
 
 export default async function Home({ searchParams }: HomeProps) {
   const initialFilters = parseInitialFilters(await searchParams);
   const listings = await getListings();
+  const frequentPlaces = await getFrequentPlaces();
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-8">
+    <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 sm:py-8">
       <div className="mx-auto max-w-6xl">
         <AppHeader currentPath="/" />
-        <Dashboard listings={listings} initialFilters={initialFilters} />
+        <Dashboard
+          listings={listings}
+          initialFilters={initialFilters}
+          frequentPlaces={frequentPlaces}
+        />
       </div>
     </main>
   );
