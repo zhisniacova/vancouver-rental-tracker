@@ -211,9 +211,7 @@ function formatDateTime(value: string | null) {
 
 function getListingImages(listing: {
   cover_image_url: string | null;
-  image_urls?: string[] | null;
 }) {
-  if (listing.image_urls?.length) return listing.image_urls.filter(Boolean);
   return listing.cover_image_url ? [listing.cover_image_url] : [];
 }
 

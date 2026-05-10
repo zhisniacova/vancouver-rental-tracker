@@ -3,9 +3,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import ListingCard from "./ListingCard";
-import type { Listing } from "@/lib/types";
-import { getAverageScore, normalizeListingUrl } from "@/lib/listingUtils";
+import ListingCard, { type Listing } from "./ListingCard";
 import DashboardMapView from "./DashboardMapView";
 import FilterBar from "./FilterBar";
 import { supabase } from "@/lib/supabase";
@@ -25,6 +23,32 @@ type Props = {
   initialFilters: DashboardInitialFilters;
   frequentPlaces: FrequentPlace[];
 };
+
+function getAverageScore(listing: Listing) {
+  const scores = [listing.sashaScore, listing.glebScore].filter(
+    (score): score is number =>
+      score !== null && score !== undefined && score > 0
+  );
+
+  if (scores.length === 0) return 0;
+
+  return scores.reduce((sum, score) => sum + score, 0) / scores.length;
+}
+
+function normalizeListingUrl(url?: string | null) {
+  if (!url) return "";
+
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+
+  try {
+    const parsed = new URL(trimmed);
+    const pathname = parsed.pathname.replace(/\/+$/, "");
+    return `${parsed.origin.toLowerCase()}${pathname}${parsed.search}`;
+  } catch {
+    return trimmed.toLowerCase().replace(/\/+$/, "");
+  }
+}
 
 function isTopPick(listing: Listing) {
   return hasBothScores(listing) && (getAverageScore(listing) ?? 0) >= 8 && listing.status !== "expired";

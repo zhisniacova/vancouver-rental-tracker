@@ -1,12 +1,12 @@
 "use client";
 
-import { FormEvent, ReactNode, useEffect, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import GeocodeListingButton from "./GeocodeListingButton";
 import { useCurrentUser } from "./CurrentUserProvider";
-import { formatStatusLabel } from "@/lib/listingUtils";
+import { formatStatusLabel } from "./StatusBadge";
 import { useNeighborhoodOptions } from "./useNeighborhoodOptions";
 import { useWorkspace } from "./WorkspaceProvider";
 
@@ -36,7 +36,6 @@ type AutofillListingResponse = Partial<{
   sqft: string;
   rawDescription: string;
   imageUrl: string;
-  imageUrls: string[];
   status: ListingStatus;
   viewingDate: string;
   contactName: string;
@@ -81,11 +80,8 @@ type ListingFormData = {
   cons: string;
   comments: string;
   rawDescription: string;
+  imageUrl: string;
 };
-
-type FormImage =
-  | { kind: "url"; url: string }
-  | { kind: "file"; file: File; preview: string };
 
 type ExistingListing = {
   id: string;
@@ -117,7 +113,6 @@ type ExistingListing = {
   comments: string | null;
   raw_description: string | null;
   cover_image_url?: string | null;
-  image_urls?: string[] | null;
   rental_search_id?: string | null;
   latitude?: number | null;
   longitude?: number | null;
@@ -190,6 +185,7 @@ function getInitialFormData(
       cons: "",
       comments: "",
       rawDescription: "",
+      imageUrl: "",
     };
   }
 
@@ -223,15 +219,8 @@ function getInitialFormData(
     cons: existingListing.cons || "",
     comments: existingListing.comments || "",
     rawDescription: existingListing.raw_description || "",
+    imageUrl: existingListing.cover_image_url || "",
   };
-}
-
-function getInitialImages(existingListing?: ExistingListing): FormImage[] {
-  if (!existingListing) return [];
-  const urls =
-    existingListing.image_urls?.filter(Boolean) ??
-    (existingListing.cover_image_url ? [existingListing.cover_image_url] : []);
-  return urls.map((url) => ({ kind: "url" as const, url }));
 }
 
 export default function ListingForm({ existingListing }: Props) {
@@ -244,10 +233,7 @@ export default function ListingForm({ existingListing }: Props) {
   const [formData, setFormData] = useState<ListingFormData>(
     getInitialFormData(currentUser, existingListing)
   );
-  const [images, setImages] = useState<FormImage[]>(
-    getInitialImages(existingListing)
-  );
-  const [imageUrlInput, setImageUrlInput] = useState("");
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isAutofilling, setIsAutofilling] = useState(false);
   const [autofillCooldownUntil, setAutofillCooldownUntil] = useState(0);
@@ -261,6 +247,13 @@ export default function ListingForm({ existingListing }: Props) {
       }));
     }
   }, [currentUser, existingListing]);
+
+  const previewUrl = useMemo(() => {
+    if (coverImageFile) {
+      return URL.createObjectURL(coverImageFile);
+    }
+    return formData.imageUrl || "";
+  }, [coverImageFile, formData.imageUrl]);
 
   function handleChange(
     event: React.ChangeEvent<
@@ -281,31 +274,9 @@ export default function ListingForm({ existingListing }: Props) {
     }));
   }
 
-  function handleAddFiles(event: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    if (files.length === 0) return;
-    const newEntries: FormImage[] = files.map((file) => ({
-      kind: "file",
-      file,
-      preview: URL.createObjectURL(file),
-    }));
-    setImages((prev) => [...prev, ...newEntries]);
-    event.target.value = "";
-  }
-
-  function addImageUrl() {
-    const url = imageUrlInput.trim();
-    if (!url) return;
-    setImages((prev) => [...prev, { kind: "url", url }]);
-    setImageUrlInput("");
-  }
-
-  function removeImage(index: number) {
-    setImages((prev) => {
-      const entry = prev[index];
-      if (entry.kind === "file") URL.revokeObjectURL(entry.preview);
-      return prev.filter((_, i) => i !== index);
-    });
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    setCoverImageFile(file);
   }
 
   function mergeAutofillData(data: AutofillListingResponse) {
@@ -331,6 +302,7 @@ export default function ListingForm({ existingListing }: Props) {
         earliestMoveIn: data.earliestMoveIn?.trim() || current.earliestMoveIn,
         sqft: data.sqft?.trim() || current.sqft,
         rawDescription: data.rawDescription?.trim() || current.rawDescription,
+        imageUrl: data.imageUrl?.trim() || current.imageUrl,
         status,
         viewingDate,
         contactName: data.contactName?.trim() || current.contactName,
@@ -342,17 +314,8 @@ export default function ListingForm({ existingListing }: Props) {
       };
     });
 
-    const autofillImages = (data.imageUrls?.length ? data.imageUrls : data.imageUrl?.trim() ? [data.imageUrl.trim()] : []);
-    if (autofillImages.length > 0) {
-      setImages((prev) => {
-        const existingUrls = new Set(
-          prev.filter((e): e is { kind: "url"; url: string } => e.kind === "url").map((e) => e.url)
-        );
-        const newEntries: FormImage[] = autofillImages
-          .filter((url) => !existingUrls.has(url))
-          .map((url) => ({ kind: "url" as const, url }));
-        return newEntries.length > 0 ? [...prev, ...newEntries] : prev;
-      });
+    if (data.imageUrl) {
+      setCoverImageFile(null);
     }
   }
 
@@ -415,32 +378,30 @@ export default function ListingForm({ existingListing }: Props) {
     }
   }
 
-  async function uploadImages(): Promise<string[]> {
-    const result: string[] = [];
-    for (const entry of images) {
-      if (entry.kind === "url") {
-        result.push(entry.url);
-      } else {
-        const fileExt = entry.file.name.split(".").pop();
-        const fileName = `${Date.now()}-${Math.random()
-          .toString(36)
-          .slice(2)}.${fileExt}`;
-        const filePath = `covers/${fileName}`;
-
-        const { error } = await supabase.storage
-          .from("listing-images")
-          .upload(filePath, entry.file);
-
-        if (error) throw error;
-
-        const { data } = supabase.storage
-          .from("listing-images")
-          .getPublicUrl(filePath);
-
-        result.push(data.publicUrl);
-      }
+  async function uploadCoverImage(): Promise<string | null> {
+    if (!coverImageFile) {
+      return formData.imageUrl.trim() || null;
     }
-    return result;
+
+    const fileExt = coverImageFile.name.split(".").pop();
+    const fileName = `${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}.${fileExt}`;
+    const filePath = `covers/${fileName}`;
+
+    const { error } = await supabase.storage
+      .from("listing-images")
+      .upload(filePath, coverImageFile);
+
+    if (error) {
+      throw error;
+    }
+
+    const { data } = supabase.storage
+      .from("listing-images")
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -461,8 +422,7 @@ export default function ListingForm({ existingListing }: Props) {
         await addNeighborhood(cleanedNeighborhood);
       }
 
-      const imageUrls = await uploadImages();
-      const coverImageUrl = imageUrls[0] ?? null;
+      const coverImageUrl = await uploadCoverImage();
 
       const payload = {
         url: formData.url,
@@ -495,7 +455,6 @@ export default function ListingForm({ existingListing }: Props) {
         comments: formData.comments || null,
         raw_description: formData.rawDescription || null,
         cover_image_url: coverImageUrl,
-        image_urls: imageUrls.length > 0 ? imageUrls : null,
         rental_search_id: existingListing
           ? existingListing.rental_search_id ?? null
           : currentRentalSearchId,
@@ -971,75 +930,56 @@ export default function ListingForm({ existingListing }: Props) {
       </FormSection>
 
       <FormSection title="Images">
-        <div className="space-y-4">
-          {images.length > 0 && (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-              {images.map((entry, i) => (
-                <div key={i} className="relative">
-                  <div className="aspect-4/3 overflow-hidden rounded-xl border border-slate-200">
-                    <img
-                      src={entry.kind === "url" ? entry.url : entry.preview}
-                      alt={`Image ${i + 1}`}
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeImage(i)}
-                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-rose-600 text-xs font-bold text-white shadow-sm hover:bg-rose-700"
-                  >
-                    ×
-                  </button>
-                  {i === 0 && (
-                    <span className="absolute bottom-1 left-1 rounded-full bg-slate-900/75 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                      Cover
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {images.length === 0 && (
-            <p className="text-sm text-slate-500">No images added yet.</p>
-          )}
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <label className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50 sm:shrink-0">
-              + Upload files
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleAddFiles}
-                className="sr-only"
-              />
+        <div className="grid gap-5 md:grid-cols-2">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Upload cover image
             </label>
-            <div className="flex flex-1 gap-2">
-              <input
-                type="url"
-                value={imageUrlInput}
-                onChange={(e) => setImageUrlInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addImageUrl();
-                  }
-                }}
-                placeholder="Or paste image URL..."
-                className={fieldClassName}
-              />
-              <button
-                type="button"
-                onClick={addImageUrl}
-                disabled={!imageUrlInput.trim()}
-                className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
-              >
-                Add
-              </button>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              Uploading a file will override the pasted image URL.
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Or paste image URL
+            </label>
+            <input
+              name="imageUrl"
+              type="url"
+              value={formData.imageUrl}
+              onChange={handleChange}
+              placeholder="https://..."
+              className={fieldClassName}
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Image preview
+            </label>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+              {previewUrl ? (
+                <div className="h-56 w-full">
+                  <img
+                    src={previewUrl}
+                    alt="Cover preview"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="flex h-56 items-center justify-center text-sm text-slate-500">
+                  No image selected yet
+                </div>
+              )}
             </div>
           </div>
-          <p className="text-xs text-slate-500">First image is used as the cover.</p>
         </div>
       </FormSection>
 

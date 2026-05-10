@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import {
   formatDistanceKm,
@@ -17,12 +16,48 @@ import {
   getSqftStatus,
   type RentalCriteriaPreferences,
 } from "@/lib/rentalPreferences";
-import { formatStatusLabel, getAverageScore } from "@/lib/listingUtils";
-import type { Listing } from "@/lib/types";
 import { useCurrentUser } from "./CurrentUserProvider";
-import { useToast } from "./Toast";
+import { formatStatusLabel } from "./StatusBadge";
 
-export type { Listing };
+export type Listing = {
+  id: string;
+  title: string;
+  price: number;
+  neighborhood: string;
+  location: string;
+  type: string;
+  furnished: string;
+  moveInDate: string;
+  addedBy: string;
+  status:
+    | "to_process"
+    | "new"
+    | "messaged"
+    | "viewing_scheduled"
+    | "viewed"
+    | "expired";
+  comments: string;
+  pros: string;
+  cons: string;
+  rawDescription: string;
+  contactName: string;
+  contactEmail: string;
+  url: string;
+  sqft?: number | null;
+  parking?: string | null;
+  storageLocker?: string | null;
+  gym?: string | null;
+  inSuiteWasher?: string | null;
+  petPolicy?: string | null;
+  coverImageUrl?: string | null;
+  createdAt?: string | null;
+  sashaScore?: number | null;
+  glebScore?: number | null;
+  rentalSearchId?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  formattedAddress?: string | null;
+};
 
 type Props = {
   listing: Listing;
@@ -86,6 +121,17 @@ function formatFurnished(value: string) {
   return value;
 }
 
+function getAverageScore(listing: Listing) {
+  const scores = [listing.sashaScore, listing.glebScore].filter(
+    (score): score is number =>
+      score !== null && score !== undefined && score > 0
+  );
+
+  if (scores.length === 0) return null;
+
+  return scores.reduce((sum, score) => sum + score, 0) / scores.length;
+}
+
 function ScoreRow({
   label,
   score,
@@ -145,7 +191,6 @@ export default function ListingCard({
 }: Props) {
   const router = useRouter();
   const { currentUser } = useCurrentUser();
-  const { showToast } = useToast();
   const averageScore = getAverageScore(listing);
   const resolvedDetailHref = detailHref ?? `/listing/${listing.id}`;
   const matchSummary = preferences
@@ -176,50 +221,18 @@ export default function ListingCard({
     frequentPlaces
   ).slice(0, 2);
 
-  const cardImages =
-    listing.imageUrls?.filter(Boolean).length
-      ? (listing.imageUrls as string[])
-      : listing.coverImageUrl
-        ? [listing.coverImageUrl]
-        : [];
-  const [cardImageIndex, setCardImageIndex] = useState(0);
-
-  useEffect(() => {
-    setCardImageIndex(0);
-  }, [listing.id]);
-
-  const [pendingAction, setPendingAction] = useState<
-    "delete" | "status" | "sasha" | "gleb" | "check" | null
-  >(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showMore, setShowMore] = useState(false);
-  const moreRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!showMore) return;
-    function handleClickOutside(e: MouseEvent) {
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
-        setShowMore(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showMore]);
-
   async function handleDelete() {
-    setPendingAction("delete");
-    setShowDeleteConfirm(false);
-    setShowMore(false);
+    const confirmDelete = window.confirm("Delete this listing?");
+    if (!confirmDelete) return;
 
     const { error } = await supabase
       .from("listings")
       .delete()
       .eq("id", listing.id);
 
-    setPendingAction(null);
-
     if (error) {
-      showToast(`Could not delete listing: ${error.message}`, "error");
+      console.error("Delete error:", error);
+      alert(`Error deleting listing: ${error.message}`);
       return;
     }
 
@@ -228,17 +241,15 @@ export default function ListingCard({
 
   async function handleStatusChange(newStatus: Listing["status"]) {
     if (newStatus === listing.status) return;
-    setPendingAction("status");
 
     const { error } = await supabase
       .from("listings")
       .update({ status: newStatus })
       .eq("id", listing.id);
 
-    setPendingAction(null);
-
     if (error) {
-      showToast(`Could not update status: ${error.message}`, "error");
+      console.error("Error updating status:", error);
+      alert(`Error updating status: ${error.message}`);
       return;
     }
 
@@ -246,9 +257,6 @@ export default function ListingCard({
   }
 
   async function checkIfStillActive() {
-    setShowMore(false);
-    setPendingAction("check");
-
     try {
       const response = await fetch("/api/check-listing", {
         method: "POST",
@@ -257,24 +265,22 @@ export default function ListingCard({
       });
 
       const result = await response.json();
-      setPendingAction(null);
 
       if (!response.ok) {
-        showToast(`Check failed: ${result.error || "Unknown error"}`, "error");
+        alert(`Check failed: ${result.error || "Unknown error"}`);
         return;
       }
 
-      showToast(
-        result.expired
-          ? `Marked as expired (${result.reason}).`
-          : "Listing still looks active.",
-        result.expired ? "info" : "success"
-      );
+      if (result.expired) {
+        alert(`Listing marked as expired (${result.reason}).`);
+      } else {
+        alert("Listing still looks active.");
+      }
 
       router.refresh();
-    } catch {
-      setPendingAction(null);
-      showToast("Could not check listing status.", "error");
+    } catch (error) {
+      console.error("Error checking listing:", error);
+      alert("Could not check listing status.");
     }
   }
 
@@ -284,17 +290,15 @@ export default function ListingCard({
   ) {
     const column = person === "sasha" ? "sasha_score" : "gleb_score";
     const scoreValue = value === "" ? null : Number(value);
-    setPendingAction(person);
 
     const { error } = await supabase
       .from("listings")
       .update({ [column]: scoreValue })
       .eq("id", listing.id);
 
-    setPendingAction(null);
-
     if (error) {
-      showToast(`Could not update score: ${error.message}`, "error");
+      console.error("Error updating score:", error);
+      alert(`Error updating score: ${error.message}`);
       return;
     }
 
@@ -302,7 +306,6 @@ export default function ListingCard({
   }
 
   const isToProcess = listing.status === "to_process";
-  const isBusy = pendingAction !== null;
 
   return (
     <article className="min-w-0 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
@@ -318,11 +321,10 @@ export default function ListingCard({
         <select
           value={listing.status}
           aria-label="Listing status"
-          disabled={pendingAction === "status"}
           onChange={(e) =>
             handleStatusChange(e.target.value as Listing["status"])
           }
-          className="absolute right-3 top-3 z-10 max-w-[150px] rounded-full border border-white/50 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-800 shadow-sm outline-none backdrop-blur-sm focus:border-slate-400 disabled:cursor-wait disabled:opacity-70"
+          className="absolute right-3 top-3 z-10 max-w-[150px] rounded-full border border-white/50 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-800 shadow-sm outline-none backdrop-blur-sm focus:border-slate-400"
         >
           {STATUS_OPTIONS.map((status) => (
             <option key={status} value={status}>
@@ -331,9 +333,9 @@ export default function ListingCard({
           ))}
         </select>
 
-        {cardImages.length > 0 ? (
+        {listing.coverImageUrl ? (
           <img
-            src={cardImages[cardImageIndex]}
+            src={listing.coverImageUrl}
             alt={listing.title}
             className="h-full w-full object-cover"
           />
@@ -356,39 +358,6 @@ export default function ListingCard({
           </div>
         )}
 
-        {cardImages.length > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                setCardImageIndex(
-                  (i) => (i - 1 + cardImages.length) % cardImages.length
-                );
-              }}
-              className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/50 p-1 leading-none text-white hover:bg-black/70"
-              aria-label="Previous image"
-            >
-              ‹
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                setCardImageIndex((i) => (i + 1) % cardImages.length);
-              }}
-              className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/50 p-1 leading-none text-white hover:bg-black/70"
-              aria-label="Next image"
-            >
-              ›
-            </button>
-            <div className="absolute bottom-2 right-2 z-10 rounded-full bg-black/50 px-2 py-0.5 text-xs font-medium text-white">
-              {cardImageIndex + 1}/{cardImages.length}
-            </div>
-          </>
-        )}
       </div>
 
       <div className="p-4 sm:p-5">
@@ -505,14 +474,14 @@ export default function ListingCard({
             label="Sasha"
             score={listing.sashaScore}
             isCurrentUser={currentUser === "Sasha"}
-            isPending={pendingAction === "sasha"}
+            isPending={false}
             onScoreChange={(v) => handleScoreChange("sasha", v)}
           />
           <ScoreRow
             label="Gleb"
             score={listing.glebScore}
             isCurrentUser={currentUser === "Gleb"}
-            isPending={pendingAction === "gleb"}
+            isPending={false}
             onScoreChange={(v) => handleScoreChange("gleb", v)}
           />
         </div>
@@ -548,81 +517,43 @@ export default function ListingCard({
             Message
           </Link>
 
-          <div
-            ref={moreRef}
-            className="relative col-span-2 sm:col-span-1"
-          >
-            <button
-              type="button"
-              disabled={isBusy}
-              onClick={() => {
-                setShowDeleteConfirm(false);
-                setShowMore((prev) => !prev);
-              }}
-              className="w-full rounded-xl border border-slate-200 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-wait disabled:opacity-60 sm:py-2"
-            >
-              {pendingAction === "check" ? "Checking…" : pendingAction === "delete" ? "Deleting…" : "More"}
-            </button>
-
-            {showMore && !showDeleteConfirm && (
-              <div className="absolute bottom-full right-0 z-20 mb-2 w-full min-w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-sm shadow-lg sm:w-44">
-                {listing.url && (
-                  <a
-                    href={listing.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block px-3 py-2 text-slate-700 hover:bg-slate-50"
-                  >
-                    Open original
-                  </a>
-                )}
-                <button
-                  type="button"
-                  onClick={checkIfStillActive}
-                  className="block w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
-                >
-                  Check active
-                </button>
-                <Link
-                  href={`/edit/${listing.id}`}
+          <details className="group relative col-span-2 sm:col-span-1 [&_summary::-webkit-details-marker]:hidden">
+            <summary className="cursor-pointer list-none rounded-xl border border-slate-200 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-100 sm:py-2">
+              More
+            </summary>
+            <div className="absolute bottom-full right-0 z-20 mb-2 w-full min-w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-sm shadow-lg sm:w-44">
+              {listing.url && (
+                <a
+                  href={listing.url}
+                  target="_blank"
+                  rel="noreferrer"
                   className="block px-3 py-2 text-slate-700 hover:bg-slate-50"
                 >
-                  Edit
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="block w-full px-3 py-2 text-left text-rose-700 hover:bg-rose-50"
-                >
-                  Delete…
-                </button>
-              </div>
-            )}
-
-            {showDeleteConfirm && (
-              <div className="absolute bottom-full right-0 z-20 mb-2 w-60 overflow-hidden rounded-xl border border-rose-200 bg-white p-3 shadow-lg">
-                <p className="mb-3 text-sm font-medium text-slate-800">
-                  Delete this listing?
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowDeleteConfirm(false)}
-                    className="rounded-lg border border-slate-200 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDelete}
-                    className="rounded-lg bg-rose-600 py-2 text-sm font-medium text-white hover:bg-rose-700"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+                  Open original
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={checkIfStillActive}
+                className="block w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
+              >
+                Check active
+              </button>
+              <Link
+                href={`/edit/${listing.id}`}
+                className="block px-3 py-2 text-slate-700 hover:bg-slate-50"
+              >
+                Edit
+              </Link>
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="block w-full px-3 py-2 text-left text-rose-700 hover:bg-rose-50"
+              >
+                Delete
+              </button>
+            </div>
+          </details>
         </div>
       </div>
     </article>

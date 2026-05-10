@@ -1,6 +1,6 @@
 import Dashboard from "@/components/Dashboard";
 import type { DashboardInitialFilters } from "@/components/Dashboard";
-import type { Listing } from "@/lib/types";
+import type { Listing } from "@/components/ListingCard";
 import AppHeader from "@/components/AppHeader";
 import { getAuthenticatedSupabaseClient } from "@/lib/auth";
 import { type FrequentPlace } from "@/lib/commute";
@@ -55,7 +55,7 @@ async function getListings(): Promise<Listing[]> {
   const { data: listings, error: listingsError } = await supabase
     .from("listings")
     .select(
-      "id, title, price, neighborhood, location, listing_type, furnished, earliest_move_in, added_by, status, comments, pros, cons, raw_description, contact_name, contact_email, url, sqft, parking, storage_locker, gym, in_suite_washer, pet_policy, cover_image_url, image_urls, created_at, sasha_score, gleb_score, rental_search_id, latitude, longitude, formatted_address"
+      "id, title, price, neighborhood, location, listing_type, furnished, earliest_move_in, added_by, status, comments, pros, cons, raw_description, contact_name, contact_email, url, sqft, parking, storage_locker, gym, in_suite_washer, pet_policy, cover_image_url, created_at, sasha_score, gleb_score, rental_search_id, latitude, longitude, formatted_address"
     )
     .order("created_at", { ascending: false });
 
@@ -89,7 +89,6 @@ async function getListings(): Promise<Listing[]> {
     inSuiteWasher: item.in_suite_washer ?? "Unknown",
     petPolicy: item.pet_policy ?? "Unknown",
     coverImageUrl: item.cover_image_url ?? null,
-    imageUrls: item.image_urls ?? null,
     createdAt: item.created_at ?? null,
     sashaScore: item.sasha_score ?? 0,
     glebScore: item.gleb_score ?? 0,

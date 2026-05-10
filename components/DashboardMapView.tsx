@@ -6,7 +6,7 @@ import {
   getCriteriaMatchSummary,
   type RentalCriteriaPreferences,
 } from "@/lib/rentalPreferences";
-import type { Listing } from "@/lib/types";
+import type { Listing } from "./ListingCard";
 import StatusBadge from "./StatusBadge";
 
 type MapListing = {
