@@ -25,7 +25,9 @@ async function getProfile(userId: string) {
   const { supabase } = await getAuthenticatedSupabaseClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("full_name, phone_number, about_us, default_message_template")
+    .select(
+      "full_name, phone_number, about_us, preferred_email_provider, default_message_template"
+    )
     .eq("id", userId)
     .maybeSingle();
 

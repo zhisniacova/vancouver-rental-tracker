@@ -17,6 +17,7 @@ type Profile = {
   full_name: string | null;
   phone_number: string | null;
   about_us: string | null;
+  preferred_email_provider: string | null;
   default_message_template: string | null;
 };
 
@@ -147,6 +148,28 @@ export default function SettingsForm({ profile, email }: Props) {
               readOnly
               className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-600 outline-none"
             />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label
+              htmlFor="preferredEmailProvider"
+              className="mb-2 block text-sm font-medium text-slate-700"
+            >
+              Preferred email compose app
+            </label>
+            <select
+              id="preferredEmailProvider"
+              name="preferredEmailProvider"
+              defaultValue={profile?.preferred_email_provider ?? "gmail"}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400"
+            >
+              <option value="default_app">Default email app</option>
+              <option value="gmail">Gmail web</option>
+              <option value="outlook">Outlook web</option>
+            </select>
+            <p className="mt-2 text-sm text-slate-500">
+              Message composer will use this as the primary open action.
+            </p>
           </div>
         </div>
       </section>

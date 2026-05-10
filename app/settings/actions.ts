@@ -42,6 +42,13 @@ function getOptionalString(formData: FormData, key: string) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function getPreferredEmailProvider(formData: FormData) {
+  const value = getOptionalString(formData, "preferredEmailProvider");
+  return value === "default_app" || value === "gmail" || value === "outlook"
+    ? value
+    : "gmail";
+}
+
 export async function updateProfile(
   _prevState: SettingsFormState,
   formData: FormData
@@ -55,6 +62,7 @@ export async function updateProfile(
       full_name: getOptionalString(formData, "fullName"),
       phone_number: getOptionalString(formData, "phoneNumber"),
       about_us: getOptionalString(formData, "aboutUs"),
+      preferred_email_provider: getPreferredEmailProvider(formData),
       default_message_template: getOptionalString(
         formData,
         "defaultMessageTemplate"

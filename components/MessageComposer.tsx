@@ -34,6 +34,7 @@ type MessageProfile = {
   full_name: string | null;
   phone_number: string | null;
   about_us: string | null;
+  preferred_email_provider: EmailProvider | null;
   default_message_template: string | null;
 };
 
@@ -54,9 +55,80 @@ const SENDERS = {
 
 type SenderName = keyof typeof SENDERS;
 type MessageType = "Email" | "Website Message" | "SMS";
+type EmailProvider = "default_app" | "gmail" | "outlook";
+
+const EMAIL_PROVIDER_LABELS: Record<EmailProvider, string> = {
+  default_app: "Default mail app",
+  gmail: "Gmail",
+  outlook: "Outlook",
+};
 
 function buildSubject(listing: ListingRecord) {
   return `Interest in your rental listing${listing.title ? `: ${listing.title}` : ""}`;
+}
+
+function normalizeEmailProvider(value?: string | null): EmailProvider {
+  return value === "default_app" || value === "gmail" || value === "outlook"
+    ? value
+    : "gmail";
+}
+
+function buildMailtoLink({
+  recipientEmail,
+  ccEmail,
+  subject,
+  body,
+}: {
+  recipientEmail: string;
+  ccEmail: string;
+  subject: string;
+  body: string;
+}) {
+  const params = new URLSearchParams();
+  if (ccEmail) params.set("cc", ccEmail);
+  if (subject) params.set("subject", subject);
+  if (body) params.set("body", body);
+
+  return `mailto:${encodeURIComponent(recipientEmail)}?${params.toString()}`;
+}
+
+function buildGmailLink({
+  recipientEmail,
+  ccEmail,
+  subject,
+  body,
+}: {
+  recipientEmail: string;
+  ccEmail: string;
+  subject: string;
+  body: string;
+}) {
+  const to = encodeURIComponent(recipientEmail);
+  const cc = encodeURIComponent(ccEmail);
+  const su = encodeURIComponent(subject);
+  const messageBody = encodeURIComponent(body);
+
+  return `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&cc=${cc}&su=${su}&body=${messageBody}`;
+}
+
+function buildOutlookLink({
+  recipientEmail,
+  ccEmail,
+  subject,
+  body,
+}: {
+  recipientEmail: string;
+  ccEmail: string;
+  subject: string;
+  body: string;
+}) {
+  const params = new URLSearchParams();
+  if (recipientEmail) params.set("to", recipientEmail);
+  if (ccEmail) params.set("cc", ccEmail);
+  if (subject) params.set("subject", subject);
+  if (body) params.set("body", body);
+
+  return `https://outlook.office.com/mail/deeplink/compose?${params.toString()}`;
 }
 
 function buildBody({
@@ -143,15 +215,26 @@ export default function MessageComposer({
   const body = bodyOverride ?? templateBody;
   const isBodyEdited = bodyOverride !== null;
   const ccEmail = senderName === "Sasha" ? SENDERS.Gleb.email : SENDERS.Sasha.email;
+  const preferredEmailProvider = normalizeEmailProvider(
+    profile?.preferred_email_provider
+  );
 
-  const gmailLink = useMemo(() => {
-    const to = encodeURIComponent(recipientEmail);
-    const cc = encodeURIComponent(ccEmail);
-    const su = encodeURIComponent(subject);
-    const messageBody = encodeURIComponent(body);
+  const emailComposeLinks = useMemo(() => {
+    const args = {
+      recipientEmail,
+      ccEmail,
+      subject,
+      body,
+    };
 
-    return `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&cc=${cc}&su=${su}&body=${messageBody}`;
+    return {
+      default_app: buildMailtoLink(args),
+      gmail: buildGmailLink(args),
+      outlook: buildOutlookLink(args),
+    } satisfies Record<EmailProvider, string>;
   }, [recipientEmail, ccEmail, subject, body]);
+  const primaryComposeHref = emailComposeLinks[preferredEmailProvider];
+  const canOpenEmail = messageType === "Email" && Boolean(recipientEmail);
 
   async function copyToClipboard() {
     const fullText =
@@ -396,17 +479,62 @@ export default function MessageComposer({
           </button>
 
           <a
-            href={gmailLink}
-            target="_blank"
-            rel="noreferrer"
+            href={canOpenEmail ? primaryComposeHref : undefined}
+            target={
+              preferredEmailProvider === "default_app" ? undefined : "_blank"
+            }
+            rel={
+              preferredEmailProvider === "default_app"
+                ? undefined
+                : "noreferrer"
+            }
             className={`rounded-xl px-4 py-3 text-center text-sm font-medium ${
-              messageType === "Email" && recipientEmail
+              canOpenEmail
                 ? "bg-blue-600 text-white hover:bg-blue-500"
                 : "pointer-events-none bg-slate-200 text-slate-500"
             }`}
           >
-            Open in Gmail
+            Open in {EMAIL_PROVIDER_LABELS[preferredEmailProvider]}
           </a>
+
+          {messageType === "Email" && (
+            <div className="grid grid-cols-3 gap-2 sm:col-span-2">
+              <a
+                href={canOpenEmail ? emailComposeLinks.default_app : undefined}
+                className={`rounded-xl border border-slate-200 px-3 py-2 text-center text-xs font-medium ${
+                  canOpenEmail
+                    ? "text-slate-700 hover:bg-slate-50"
+                    : "pointer-events-none text-slate-300"
+                }`}
+              >
+                Mail app
+              </a>
+              <a
+                href={canOpenEmail ? emailComposeLinks.gmail : undefined}
+                target="_blank"
+                rel="noreferrer"
+                className={`rounded-xl border border-slate-200 px-3 py-2 text-center text-xs font-medium ${
+                  canOpenEmail
+                    ? "text-slate-700 hover:bg-slate-50"
+                    : "pointer-events-none text-slate-300"
+                }`}
+              >
+                Gmail
+              </a>
+              <a
+                href={canOpenEmail ? emailComposeLinks.outlook : undefined}
+                target="_blank"
+                rel="noreferrer"
+                className={`rounded-xl border border-slate-200 px-3 py-2 text-center text-xs font-medium ${
+                  canOpenEmail
+                    ? "text-slate-700 hover:bg-slate-50"
+                    : "pointer-events-none text-slate-300"
+                }`}
+              >
+                Outlook
+              </a>
+            </div>
+          )}
 
           <button
             onClick={markAsMessaged}
