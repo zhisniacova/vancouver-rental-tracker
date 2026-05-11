@@ -140,6 +140,42 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+## Screenshot Capture
+
+The project includes a Playwright screenshot script for capturing important UI
+states for design review.
+
+Install Playwright browsers once:
+
+```bash
+npx playwright install chromium
+```
+
+Run against the deployed app:
+
+```bash
+SCREENSHOT_BASE_URL="https://rental-search-tracker.vercel.app" \
+SCREENSHOT_EMAIL="your-test-user@example.com" \
+SCREENSHOT_PASSWORD="your-test-password" \
+npm run screenshots
+```
+
+You can omit `SCREENSHOT_EMAIL` and `SCREENSHOT_PASSWORD` only if the target
+page is already publicly accessible. Screenshots are written to `screenshots/`.
+
+Captured states include:
+
+- dashboard/listings
+- filters open
+- empty search state
+- map view when available
+- add listing form
+- listing details and edit page when a listing exists
+- message composer when a listing exists
+- viewing schedule
+- mobile dashboard
+- mobile add listing form
+
 
 ## Resume Highlights
 
