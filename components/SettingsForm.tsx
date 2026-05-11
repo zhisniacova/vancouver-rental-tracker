@@ -16,6 +16,7 @@ type Profile = {
   nickname: string | null;
   full_name: string | null;
   phone_number: string | null;
+  contact_email: string | null;
   about_us: string | null;
   preferred_email_provider: string | null;
   default_message_template: string | null;
@@ -29,13 +30,26 @@ type Props = {
 const initialState: SettingsFormState = {};
 
 export default function SettingsForm({ profile, email }: Props) {
-  const [state, formAction, pending] = useActionState(
+  const [profileState, profileAction, profilePending] = useActionState(
+    updateProfile,
+    initialState
+  );
+  const [templateState, templateAction, templatePending] = useActionState(
     updateProfile,
     initialState
   );
   const templateTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isEditingTemplate, setIsEditingTemplate] = useState(false);
+  const [nickname, setNickname] = useState(profile?.nickname ?? "");
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
   const [phoneNumber, setPhoneNumber] = useState(profile?.phone_number ?? "");
+  const [contactEmail, setContactEmail] = useState(
+    profile?.contact_email ?? email
+  );
+  const [preferredEmailProvider, setPreferredEmailProvider] = useState(
+    profile?.preferred_email_provider ?? "gmail"
+  );
   const [aboutUs, setAboutUs] = useState(profile?.about_us ?? DEFAULT_ABOUT_US);
   const [messageTemplate, setMessageTemplate] = useState(
     profile?.default_message_template ?? DEFAULT_MESSAGE_TEMPLATE
@@ -76,14 +90,37 @@ export default function SettingsForm({ profile, email }: Props) {
   }
 
   return (
-    <form
-      action={formAction}
-      className="space-y-6"
-    >
-      <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-        <div className="mb-6">
-          <p className="text-sm font-medium text-slate-500">{email}</p>
-          <h2 className="text-2xl font-bold text-slate-900">Profile</h2>
+    <div className="space-y-6">
+      <form
+        action={profileAction}
+        className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200"
+      >
+        <input type="hidden" name="settingsSection" value="profile" />
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-slate-500">{email}</p>
+            <h2 className="text-2xl font-bold text-slate-900">Profile</h2>
+          </div>
+          <div className="flex gap-2">
+            {!isEditingProfile && (
+              <button
+                type="button"
+                onClick={() => setIsEditingProfile(true)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Edit
+              </button>
+            )}
+            {isEditingProfile && (
+              <button
+                type="submit"
+                disabled={profilePending}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60"
+              >
+                {profilePending ? "Saving..." : "Save profile"}
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -97,8 +134,10 @@ export default function SettingsForm({ profile, email }: Props) {
             <input
               id="nickname"
               name="nickname"
-              defaultValue={profile?.nickname ?? ""}
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400"
+              value={nickname}
+              onChange={(event) => setNickname(event.target.value)}
+              disabled={!isEditingProfile || profilePending}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400 disabled:bg-slate-50 disabled:text-slate-500"
             />
           </div>
 
@@ -114,7 +153,8 @@ export default function SettingsForm({ profile, email }: Props) {
               name="fullName"
               value={fullName}
               onChange={(event) => setFullName(event.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400"
+              disabled={!isEditingProfile || profilePending}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400 disabled:bg-slate-50 disabled:text-slate-500"
             />
           </div>
 
@@ -131,7 +171,8 @@ export default function SettingsForm({ profile, email }: Props) {
               type="tel"
               value={phoneNumber}
               onChange={(event) => setPhoneNumber(event.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400"
+              disabled={!isEditingProfile || profilePending}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400 disabled:bg-slate-50 disabled:text-slate-500"
             />
           </div>
 
@@ -150,6 +191,24 @@ export default function SettingsForm({ profile, email }: Props) {
             />
           </div>
 
+          <div>
+            <label
+              htmlFor="contactEmail"
+              className="mb-2 block text-sm font-medium text-slate-700"
+            >
+              Contact email for collaborators
+            </label>
+            <input
+              id="contactEmail"
+              name="contactEmail"
+              type="email"
+              value={contactEmail}
+              onChange={(event) => setContactEmail(event.target.value)}
+              disabled={!isEditingProfile || profilePending}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400 disabled:bg-slate-50 disabled:text-slate-500"
+            />
+          </div>
+
           <div className="sm:col-span-2">
             <label
               htmlFor="preferredEmailProvider"
@@ -160,8 +219,12 @@ export default function SettingsForm({ profile, email }: Props) {
             <select
               id="preferredEmailProvider"
               name="preferredEmailProvider"
-              defaultValue={profile?.preferred_email_provider ?? "gmail"}
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400"
+              value={preferredEmailProvider}
+              onChange={(event) =>
+                setPreferredEmailProvider(event.target.value)
+              }
+              disabled={!isEditingProfile || profilePending}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400 disabled:bg-slate-50 disabled:text-slate-500"
             >
               <option value="default_app">Default email app</option>
               <option value="gmail">Gmail web</option>
@@ -172,14 +235,51 @@ export default function SettingsForm({ profile, email }: Props) {
             </p>
           </div>
         </div>
-      </section>
+        {profileState.error && (
+          <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+            {profileState.error}
+          </p>
+        )}
+        {profileState.message && (
+          <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {profileState.message}
+          </p>
+        )}
+      </form>
 
-      <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-        <div className="mb-6">
-          <p className="text-sm font-medium text-slate-500">Defaults</p>
-          <h2 className="text-2xl font-bold text-slate-900">
-            Message Template
-          </h2>
+      <form
+        id="message-template"
+        action={templateAction}
+        className="scroll-mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200"
+      >
+        <input type="hidden" name="settingsSection" value="message" />
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-slate-500">Defaults</p>
+            <h2 className="text-2xl font-bold text-slate-900">
+              Message Template
+            </h2>
+          </div>
+          <div className="flex gap-2">
+            {!isEditingTemplate && (
+              <button
+                type="button"
+                onClick={() => setIsEditingTemplate(true)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Edit
+              </button>
+            )}
+            {isEditingTemplate && (
+              <button
+                type="submit"
+                disabled={templatePending}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60"
+              >
+                {templatePending ? "Saving..." : "Save template"}
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)] lg:items-stretch">
@@ -200,8 +300,9 @@ export default function SettingsForm({ profile, email }: Props) {
                 rows={5}
                 value={aboutUs}
                 onChange={(event) => setAboutUs(event.target.value)}
+                disabled={!isEditingTemplate || templatePending}
                 placeholder="A reusable intro about who will live in the rental."
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400"
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400 disabled:bg-slate-50 disabled:text-slate-500"
               />
             </div>
 
@@ -223,7 +324,8 @@ export default function SettingsForm({ profile, email }: Props) {
                 rows={17}
                 value={messageTemplate}
                 onChange={(event) => setMessageTemplate(event.target.value)}
-                className="min-h-[42rem] w-full flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm text-slate-900 outline-none focus:border-slate-400"
+                disabled={!isEditingTemplate || templatePending}
+                className="min-h-[42rem] w-full flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm text-slate-900 outline-none focus:border-slate-400 disabled:bg-slate-50 disabled:text-slate-500"
               />
             </div>
           </div>
@@ -244,8 +346,9 @@ export default function SettingsForm({ profile, email }: Props) {
                     key={variable.key}
                     type="button"
                     onClick={() => insertVariable(variable.key)}
+                    disabled={!isEditingTemplate || templatePending}
                     title={variable.description}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 font-mono text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 font-mono text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <span>
                       {"{{"}
@@ -272,32 +375,17 @@ export default function SettingsForm({ profile, email }: Props) {
             </div>
           </aside>
         </div>
-      </section>
-
-      {state.error && (
-        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
-          {state.error}
-        </p>
-      )}
-
-      {state.message && (
-        <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          {state.message}
-        </p>
-      )}
-
-      <div className="flex items-center justify-between gap-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-        <p className="text-sm text-slate-500">
-          Saves your profile and message defaults.
-        </p>
-        <button
-          type="submit"
-          disabled={pending}
-          className="shrink-0 rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60"
-        >
-          {pending ? "Saving..." : "Save settings"}
-        </button>
-      </div>
-    </form>
+        {templateState.error && (
+          <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+            {templateState.error}
+          </p>
+        )}
+        {templateState.message && (
+          <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {templateState.message}
+          </p>
+        )}
+      </form>
+    </div>
   );
 }

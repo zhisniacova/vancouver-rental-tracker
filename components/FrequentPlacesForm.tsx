@@ -72,7 +72,7 @@ export default function FrequentPlacesForm({ places }: Props) {
       <form
         key={currentWorkspace?.id ?? "no-workspace"}
         action={formAction}
-        className="grid gap-3 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.3fr)_auto]"
+        className="grid gap-3 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.2fr)_minmax(0,0.55fr)_minmax(0,0.55fr)_auto]"
       >
         <input
           type="hidden"
@@ -81,7 +81,7 @@ export default function FrequentPlacesForm({ places }: Props) {
         />
         <label>
           <span className="mb-2 block text-sm font-medium text-slate-700">
-            Place name
+            📍 Place name
           </span>
           <input
             name="placeName"
@@ -97,6 +97,34 @@ export default function FrequentPlacesForm({ places }: Props) {
           <input
             name="placeAddress"
             placeholder="2329 West Mall, Vancouver"
+            disabled={!currentWorkspace || pending}
+            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60"
+          />
+        </label>
+        <label>
+          <span className="mb-2 block text-sm font-medium text-slate-700">
+            🚗 Max drive
+          </span>
+          <input
+            name="maxDriveMinutes"
+            type="number"
+            min="1"
+            inputMode="numeric"
+            placeholder="25"
+            disabled={!currentWorkspace || pending}
+            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60"
+          />
+        </label>
+        <label>
+          <span className="mb-2 block text-sm font-medium text-slate-700">
+            🚇 Max transit
+          </span>
+          <input
+            name="maxTransitMinutes"
+            type="number"
+            min="1"
+            inputMode="numeric"
+            placeholder="40"
             disabled={!currentWorkspace || pending}
             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60"
           />
@@ -146,6 +174,20 @@ export default function FrequentPlacesForm({ places }: Props) {
                   <p className="mt-1 text-xs text-slate-400">
                     {place.latitude.toFixed(5)}, {place.longitude.toFixed(5)}
                   </p>
+                )}
+                {(place.maxDriveMinutes || place.maxTransitMinutes) && (
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium text-slate-500">
+                    {place.maxDriveMinutes && (
+                      <span className="rounded-full bg-white px-2 py-1 ring-1 ring-slate-200">
+                        🚗 {place.maxDriveMinutes} min max
+                      </span>
+                    )}
+                    {place.maxTransitMinutes && (
+                      <span className="rounded-full bg-white px-2 py-1 ring-1 ring-slate-200">
+                        🚇 {place.maxTransitMinutes} min max
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
               <button

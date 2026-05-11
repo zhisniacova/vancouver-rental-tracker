@@ -3,20 +3,14 @@
 import { useCurrentUser } from "./CurrentUserProvider";
 
 export default function UserSwitcher() {
-  const { currentUser, setCurrentUser } = useCurrentUser();
+  const { currentUser } = useCurrentUser();
 
   return (
     <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-      <span className="shrink-0 text-sm font-medium text-slate-500">I am:</span>
-
-      <select
-        value={currentUser}
-        onChange={(e) => setCurrentUser(e.target.value as "Sasha" | "Gleb")}
-        className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900 outline-none focus:border-slate-400"
-      >
-        <option value="Sasha">Sasha</option>
-        <option value="Gleb">Gleb</option>
-      </select>
+      <span className="shrink-0 text-sm font-medium text-slate-500">Signed in:</span>
+      <span className="truncate text-sm font-semibold text-slate-900">
+        {currentUser?.displayName ?? "Account"}
+      </span>
     </div>
   );
 }

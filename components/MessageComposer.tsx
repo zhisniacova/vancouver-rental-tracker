@@ -9,7 +9,7 @@ import {
   renderMessageTemplate,
 } from "@/lib/messageTemplate";
 import { supabase } from "@/lib/supabase";
-import { useCurrentUser } from "./CurrentUserProvider";
+import { getMemberDisplayName, type WorkspaceMember } from "@/lib/collaboration";
 
 type ListingRecord = {
   id: string;
@@ -28,32 +28,20 @@ type Props = {
   listing: ListingRecord;
   profile: MessageProfile | null;
   accountEmail: string;
+  currentUserId: string;
+  members: WorkspaceMember[];
 };
 
 type MessageProfile = {
   full_name: string | null;
+  nickname: string | null;
   phone_number: string | null;
+  contact_email: string | null;
   about_us: string | null;
   preferred_email_provider: EmailProvider | null;
   default_message_template: string | null;
 };
 
-const SENDERS = {
-  Sasha: {
-    displayName: "Sasha",
-    fullName: "Alexandra Chistyakov Klochko",
-    email: "zhisniacova@gmail.com",
-    phone: "604-787-7039",
-  },
-  Gleb: {
-    displayName: "Gleb",
-    fullName: "Gleb Valiakhmetov",
-    email: "glebikus1@gmail.com",
-    phone: "778-697-7316",
-  },
-} as const;
-
-type SenderName = keyof typeof SENDERS;
 type MessageType = "Email" | "Website Message" | "SMS";
 type EmailProvider = "default_app" | "gmail" | "outlook";
 
@@ -133,29 +121,28 @@ function buildOutlookLink({
 
 function buildBody({
   listing,
-  senderName,
-  currentUser,
+  sender,
   recipientName,
   profile,
   accountEmail,
+  currentUserId,
 }: {
   listing: ListingRecord;
-  senderName: SenderName;
-  currentUser: SenderName;
+  sender: WorkspaceMember;
   recipientName: string;
   profile: MessageProfile | null;
   accountEmail: string;
+  currentUserId: string;
 }) {
-  const fallbackSender = SENDERS[senderName];
-  const useProfile = senderName === currentUser;
+  const isCurrentSender = sender.userId === currentUserId;
   const fullName =
-    useProfile && profile?.full_name ? profile.full_name : fallbackSender.fullName;
+    sender.fullName ||
+    (isCurrentSender ? profile?.full_name : null) ||
+    getMemberDisplayName(sender);
   const senderEmail =
-    useProfile && accountEmail ? accountEmail : fallbackSender.email;
+    sender.email || (isCurrentSender ? profile?.contact_email || accountEmail : "");
   const senderPhone =
-    useProfile && profile?.phone_number
-      ? profile.phone_number
-      : fallbackSender.phone;
+    sender.phoneNumber || (isCurrentSender ? profile?.phone_number : "") || "";
   const template = profile?.default_message_template || DEFAULT_MESSAGE_TEMPLATE;
 
   return renderMessageTemplate(template, {
@@ -173,48 +160,56 @@ export default function MessageComposer({
   listing,
   profile,
   accountEmail,
+  currentUserId,
+  members,
 }: Props) {
   const router = useRouter();
-  const { currentUser } = useCurrentUser();
+  const currentMember =
+    members.find((member) => member.userId === currentUserId) ??
+    ({
+      userId: currentUserId,
+      role: "member",
+      nickname: profile?.nickname ?? null,
+      fullName: profile?.full_name ?? null,
+      email: profile?.contact_email || accountEmail || null,
+      phoneNumber: profile?.phone_number ?? null,
+    } satisfies WorkspaceMember);
 
-  const [senderName, setSenderName] = useState<SenderName>(currentUser);
+  const [senderId, setSenderId] = useState(currentMember.userId);
   const [messageType, setMessageType] = useState<MessageType>("Email");
   const [recipientName, setRecipientName] = useState(listing.contact_name ?? "");
   const [recipientEmail, setRecipientEmail] = useState(listing.contact_email ?? "");
   const [recipientPhone, setRecipientPhone] = useState(listing.contact_phone ?? "");
   const [subject, setSubject] = useState(buildSubject(listing));
-  const [customIntro, setCustomIntro] = useState("");
   const [bodyOverride, setBodyOverride] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const sender =
+    members.find((member) => member.userId === senderId) ?? currentMember;
+  const ccEmail = members
+    .filter((member) => member.userId !== sender.userId)
+    .map((member) => member.email)
+    .filter((email): email is string => Boolean(email))
+    .join(",");
 
   const templateBody = useMemo(() => {
-    const base = buildBody({
+    return buildBody({
       listing,
-      senderName,
-      currentUser,
+      sender,
       recipientName,
       profile,
       accountEmail,
+      currentUserId,
     });
-
-    if (!customIntro.trim()) return base;
-
-    const lines = base.split("\n\n");
-    if (lines.length < 2) return `${base}\n\n${customIntro.trim()}`;
-
-    return `${lines[0]}\n\n${customIntro.trim()}\n\n${lines.slice(1).join("\n\n")}`;
   }, [
     listing,
-    senderName,
-    currentUser,
+    sender,
     recipientName,
     profile,
     accountEmail,
-    customIntro,
+    currentUserId,
   ]);
   const body = bodyOverride ?? templateBody;
   const isBodyEdited = bodyOverride !== null;
-  const ccEmail = senderName === "Sasha" ? SENDERS.Gleb.email : SENDERS.Sasha.email;
   const preferredEmailProvider = normalizeEmailProvider(
     profile?.preferred_email_provider
   );
@@ -256,7 +251,7 @@ export default function MessageComposer({
       .insert([
         {
           listing_id: listing.id,
-          sender_name: senderName,
+          sender_name: getMemberDisplayName(sender),
           message_type: messageType,
           recipient_name: recipientName || null,
           recipient_email: recipientEmail || null,
@@ -277,7 +272,7 @@ export default function MessageComposer({
       .from("listings")
       .update({
         status: "messaged",
-        messaged_by: senderName,
+        messaged_by: getMemberDisplayName(sender),
         messaged_at: nowIso,
       })
       .eq("id", listing.id);
@@ -329,12 +324,15 @@ export default function MessageComposer({
               Sender
             </label>
             <select
-              value={senderName}
-              onChange={(e) => setSenderName(e.target.value as SenderName)}
+              value={senderId}
+              onChange={(e) => setSenderId(e.target.value)}
               className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400"
             >
-              <option value="Sasha">Sasha</option>
-              <option value="Gleb">Gleb</option>
+              {[currentMember, ...members.filter((member) => member.userId !== currentMember.userId)].map((member) => (
+                <option key={member.userId} value={member.userId}>
+                  {getMemberDisplayName(member)}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -406,18 +404,6 @@ export default function MessageComposer({
             </div>
           )}
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              Optional custom intro
-            </label>
-            <textarea
-              rows={4}
-              value={customIntro}
-              onChange={(e) => setCustomIntro(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400"
-              placeholder="Add a custom sentence before the main message."
-            />
-          </div>
         </div>
       </section>
 

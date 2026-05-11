@@ -1,8 +1,9 @@
 import Link from "next/link";
 import AddToCalendarButton from "@/components/AddToCalendarButton";
-import ContactActions from "@/components/ContactActions";
+import ContactInfoCard from "@/components/ContactInfoCard";
 import GeocodeListingButton from "@/components/GeocodeListingButton";
 import ListingImageGallery from "@/components/ListingImageGallery";
+import ListingInlineEditPanel from "@/components/ListingInlineEditPanel";
 import ListingMapPreview from "@/components/ListingMapPreview";
 import ListingNotesPanel from "@/components/ListingNotesPanel";
 import MessageHistory from "@/components/MessageHistory";
@@ -10,18 +11,27 @@ import ListingQuickEditPanel from "@/components/ListingQuickEditPanel";
 import NeedsActionNavigator from "@/components/NeedsActionNavigator";
 import { getAuthenticatedSupabaseClient } from "@/lib/auth";
 import {
-  formatDistanceKm,
   formatDriveTime,
   getCommuteSummaries,
   type FrequentPlace,
 } from "@/lib/commute";
+import {
+  getAverageCollaboratorScore,
+  type ListingImage,
+  type ListingScore,
+  type WorkspaceMember,
+} from "@/lib/collaboration";
+import {
+  getCustomCriteriaMatchSummary,
+  type MemberCriterionPreference,
+  type WorkspaceCriterion,
+} from "@/lib/customCriteria";
 import {
   getBudgetStatus,
   getCriteriaMatchSummary,
   getPricePerSqft,
   getSqftStatus,
   normalizeRentalPreferences,
-  type CriteriaSignal,
 } from "@/lib/rentalPreferences";
 
 type ListingPageProps = {
@@ -108,7 +118,7 @@ async function getListingDetails(id: string) {
     ? await supabase
         .from("rental_search_places")
         .select(
-          "id, rental_search_id, name, address, latitude, longitude, formatted_address"
+          "id, rental_search_id, name, address, latitude, longitude, formatted_address, max_drive_minutes, max_transit_minutes"
         )
         .eq("rental_search_id", listing.rental_search_id)
         .order("created_at", { ascending: true })
@@ -118,10 +128,147 @@ async function getListingDetails(id: string) {
     console.error("Error fetching frequent places:", placesError);
   }
 
+  const { data: images, error: imagesError } = await supabase
+    .from("listing_images")
+    .select("id, image_url, position, source")
+    .eq("listing_id", id)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (imagesError) {
+    console.error("Error fetching listing images:", imagesError);
+  }
+
+  const { data: scores, error: scoresError } = await supabase
+    .from("listing_scores")
+    .select("listing_id, user_id, score")
+    .eq("listing_id", id);
+
+  if (scoresError) {
+    console.error("Error fetching listing scores:", scoresError);
+  }
+
+  const { data: members, error: membersError } = listing.rental_search_id
+    ? await supabase
+        .from("search_members")
+        .select("user_id, role")
+        .eq("rental_search_id", listing.rental_search_id)
+        .order("created_at", { ascending: true })
+    : { data: [], error: null };
+
+  if (membersError) {
+    console.error("Error fetching members:", membersError);
+  }
+
+  const memberIds = (members ?? []).map((member) => member.user_id);
+  const { data: profiles, error: profilesError } = memberIds.length
+    ? await supabase
+        .from("profiles")
+        .select("id, nickname, full_name, phone_number, contact_email")
+        .in("id", memberIds)
+    : { data: [], error: null };
+
+  if (profilesError) {
+    console.error("Error fetching member profiles:", profilesError);
+  }
+
+  const profilesById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+
+  const { data: criteria, error: criteriaError } = listing.rental_search_id
+    ? await supabase
+        .from("rental_search_criteria")
+        .select("id, rental_search_id, key, label, builtin_key, keywords, archived_at")
+        .eq("rental_search_id", listing.rental_search_id)
+        .order("created_at", { ascending: true })
+    : { data: [], error: null };
+
+  if (criteriaError) {
+    console.error("Error fetching criteria:", criteriaError);
+  }
+
+  const { data: memberPreferences, error: memberPreferencesError } =
+    listing.rental_search_id
+      ? await supabase
+          .from("search_member_criteria_preferences")
+          .select("rental_search_id, user_id, criterion_id, importance")
+          .eq("rental_search_id", listing.rental_search_id)
+      : { data: [], error: null };
+
+  if (memberPreferencesError) {
+    console.error("Error fetching member criteria preferences:", memberPreferencesError);
+  }
+
   return {
     listing,
     preferences: normalizeRentalPreferences(rentalSearch?.criteria_preferences),
     messages: messages ?? [],
+    images: ((images ?? []) as Array<{
+      id: string;
+      image_url: string;
+      position: number | null;
+      source: string | null;
+    }>).map(
+      (image): ListingImage => ({
+        id: image.id,
+        url: image.image_url,
+        position: image.position ?? 0,
+        source: image.source,
+      })
+    ),
+    scores: ((scores ?? []) as Array<{
+      user_id: string;
+      score: number | null;
+    }>).map(
+      (score): ListingScore => ({
+        userId: score.user_id,
+        score: score.score,
+      })
+    ),
+    members: ((members ?? []) as Array<{
+      user_id: string;
+      role: "owner" | "member";
+    }>).map((member): WorkspaceMember => {
+      const profile = profilesById.get(member.user_id);
+      return {
+        rentalSearchId: listing.rental_search_id,
+        userId: member.user_id,
+        role: member.role,
+        nickname: profile?.nickname ?? null,
+        fullName: profile?.full_name ?? null,
+        email: profile?.contact_email ?? null,
+        phoneNumber: profile?.phone_number ?? null,
+      };
+    }),
+    criteria: ((criteria ?? []) as Array<{
+      id: string;
+      rental_search_id: string;
+      key: string;
+      label: string;
+      builtin_key: string | null;
+      keywords: string[] | null;
+      archived_at: string | null;
+    }>).map(
+      (criterion): WorkspaceCriterion => ({
+        id: criterion.id,
+        rentalSearchId: criterion.rental_search_id,
+        key: criterion.key,
+        label: criterion.label,
+        builtinKey: criterion.builtin_key,
+        keywords: criterion.keywords ?? [],
+        archivedAt: criterion.archived_at,
+      })
+    ),
+    memberPreferences: ((memberPreferences ?? []) as Array<{
+      rental_search_id: string;
+      user_id: string;
+      criterion_id: string;
+      importance: MemberCriterionPreference["importance"];
+    }>).map((preference): MemberCriterionPreference => ({
+      rentalSearchId: preference.rental_search_id,
+      userId: preference.user_id,
+      criterionId: preference.criterion_id,
+      importance: preference.importance,
+    })),
     places: ((places ?? []) as Array<{
       id: string;
       rental_search_id: string;
@@ -130,6 +277,8 @@ async function getListingDetails(id: string) {
       latitude: number | null;
       longitude: number | null;
       formatted_address: string | null;
+      max_drive_minutes: number | null;
+      max_transit_minutes: number | null;
     }>).map(
       (place): FrequentPlace => ({
         id: place.id,
@@ -139,12 +288,14 @@ async function getListingDetails(id: string) {
         latitude: place.latitude,
         longitude: place.longitude,
         formattedAddress: place.formatted_address,
+        maxDriveMinutes: place.max_drive_minutes,
+        maxTransitMinutes: place.max_transit_minutes,
       })
     ),
   };
 }
 
-function getAverageScore(listing: {
+function getLegacyAverageScore(listing: {
   sasha_score: number | null;
   gleb_score: number | null;
 }) {
@@ -185,13 +336,21 @@ function getSqftStyles(status: ReturnType<typeof getSqftStatus>) {
   return "bg-slate-100 text-slate-500";
 }
 
-function getCriteriaSymbol(signal: CriteriaSignal) {
+function getCriteriaSymbol(signal: {
+  matched: boolean;
+  known: boolean;
+  importance: string;
+}) {
   if (signal.matched) return "✓";
   if (!signal.known) return "?";
   return signal.importance === "must-have" ? "✕" : "!";
 }
 
-function getCriteriaStyles(signal: CriteriaSignal) {
+function getCriteriaStyles(signal: {
+  matched: boolean;
+  known: boolean;
+  importance: string;
+}) {
   if (signal.matched) return "bg-emerald-50 text-emerald-700 ring-emerald-100";
   if (signal.importance === "must-have") return "bg-rose-50 text-rose-700 ring-rose-100";
   if (signal.known) return "bg-amber-50 text-amber-700 ring-amber-100";
@@ -209,10 +368,53 @@ function formatDateTime(value: string | null) {
   });
 }
 
-function getListingImages(listing: {
-  cover_image_url: string | null;
-}) {
-  return listing.cover_image_url ? [listing.cover_image_url] : [];
+function CarIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+    >
+      <path d="M5 11l1.5-4.5A2 2 0 018.4 5h7.2a2 2 0 011.9 1.5L19 11" />
+      <path d="M4 11h16v6H4z" />
+      <path d="M7 17v2" />
+      <path d="M17 17v2" />
+      <path d="M7.5 14h.01" />
+      <path d="M16.5 14h.01" />
+    </svg>
+  );
+}
+
+function BusIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+    >
+      <path d="M6 4h12a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2z" />
+      <path d="M4 10h16" />
+      <path d="M8 18v2" />
+      <path d="M16 18v2" />
+      <path d="M8 14h.01" />
+      <path d="M16 14h.01" />
+    </svg>
+  );
+}
+
+function getListingImages(images: ListingImage[], coverImageUrl: string | null) {
+  if (images.length > 0) return images.map((image) => image.url).filter(Boolean);
+  return coverImageUrl ? [coverImageUrl] : [];
 }
 
 export default async function ListingDetailsPage({
@@ -236,23 +438,42 @@ export default async function ListingDetailsPage({
     );
   }
 
-  const { listing, preferences, messages, places } = data;
-  const averageScore = getAverageScore(listing);
+  const {
+    listing,
+    preferences,
+    messages,
+    places,
+    images,
+    scores,
+    members,
+    criteria,
+    memberPreferences,
+  } = data;
+  const averageScore =
+    getAverageCollaboratorScore(scores) ?? getLegacyAverageScore(listing);
   const pricePerSqft = getPricePerSqft(listing.price ?? 0, listing.sqft);
   const budgetStatus = getBudgetStatus(listing.price ?? 0, preferences);
   const sqftStatus = getSqftStatus(listing.sqft, preferences);
-  const matchSummary = getCriteriaMatchSummary(preferences, {
+  const listingCriteriaInput = {
     parking: listing.parking,
     storageLocker: listing.storage_locker,
     gym: listing.gym,
     inSuiteWasher: listing.in_suite_washer,
     petPolicy: listing.pet_policy,
     furnished: listing.furnished,
-  });
+  };
+  const matchSummary = criteria.length
+    ? getCustomCriteriaMatchSummary({
+        criteria,
+        preferences: memberPreferences,
+        listing: listingCriteriaInput,
+        searchableText: `${listing.title} ${listing.location} ${listing.neighborhood} ${listing.raw_description}`,
+      })
+    : getCriteriaMatchSummary(preferences, listingCriteriaInput);
   const criteriaSignals = matchSummary.signals.filter(
     (signal) => signal.points > 0
   );
-  const listingImages = getListingImages(listing);
+  const listingImages = getListingImages(images, listing.cover_image_url);
   const commuteSummaries = getCommuteSummaries(
     {
       latitude: listing.latitude,
@@ -402,17 +623,26 @@ export default async function ListingDetailsPage({
                     .join(", ")}
                 </p>
               )}
+              <ListingInlineEditPanel
+                listingId={listing.id}
+                title="Edit summary"
+                fields={[
+                  { name: "title", label: "Title", value: listing.title },
+                  { name: "location", label: "Address", value: listing.location },
+                  {
+                    name: "neighborhood",
+                    label: "Neighborhood",
+                    value: listing.neighborhood,
+                  },
+                  { name: "price", label: "Price", value: listing.price, type: "number" },
+                  { name: "sqft", label: "Sqft", value: listing.sqft, type: "number" },
+                ]}
+              />
             </section>
 
             <ListingImageGallery
               images={listingImages}
               title={listing.title || "Listing image"}
-            />
-
-            <ListingMapPreview
-              latitude={listing.latitude}
-              longitude={listing.longitude}
-              formattedAddress={listing.formatted_address}
             />
 
             {commuteSummaries.length > 0 && (
@@ -425,7 +655,7 @@ export default async function ListingDetailsPage({
                     Estimated Commutes
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Simple estimated driving time based on saved workspace
+                    Simple drive and transit estimates based on saved workspace
                     places.
                   </p>
                 </div>
@@ -434,17 +664,47 @@ export default async function ListingDetailsPage({
                   {commuteSummaries.map((summary) => (
                     <div
                       key={summary.place.id}
-                      className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-100"
+                      className={`rounded-xl p-4 ring-1 ${
+                        summary.exceedsDriveLimit || summary.exceedsTransitLimit
+                          ? "bg-rose-50 ring-rose-100"
+                          : "bg-slate-50 ring-slate-100"
+                      }`}
                     >
                       <p className="font-semibold text-slate-900">
                         {summary.place.name}
                       </p>
-                      <p className="mt-1 text-2xl font-bold text-slate-900">
-                        {formatDriveTime(summary.estimatedDrivingMinutes)}
-                      </p>
-                      <p className="text-sm text-slate-500">
-                        {formatDistanceKm(summary.distanceKm)} estimated drive
-                      </p>
+                      <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                        <div>
+                          <p
+                            className={`inline-flex items-center gap-2 text-xl font-bold ${
+                              summary.exceedsDriveLimit
+                                ? "text-rose-700"
+                                : "text-slate-900"
+                            }`}
+                          >
+                            <CarIcon />
+                            {formatDriveTime(summary.estimatedDrivingMinutes)}
+                          </p>
+                        </div>
+                        <div>
+                          <p
+                            className={`inline-flex items-center gap-2 text-xl font-bold ${
+                              summary.exceedsTransitLimit
+                                ? "text-rose-700"
+                                : "text-slate-900"
+                            }`}
+                          >
+                            <BusIcon />
+                            {formatDriveTime(summary.estimatedTransitMinutes)}
+                          </p>
+                        </div>
+                      </div>
+                      {(summary.exceedsDriveLimit ||
+                        summary.exceedsTransitLimit) && (
+                        <p className="mt-2 text-xs font-semibold text-rose-700">
+                          Over saved commute limit
+                        </p>
+                      )}
                       <p className="mt-2 line-clamp-2 text-xs text-slate-500">
                         {summary.place.formattedAddress ||
                           summary.place.address}
@@ -471,14 +731,8 @@ export default async function ListingDetailsPage({
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {[
                   ["Type", listing.listing_type || "—"],
-                  ["Address", listing.formatted_address || listing.location || "—"],
                   ["Furnished", listing.furnished || "—"],
                   ["Move-in", listing.earliest_move_in || "—"],
-                  ["Sqft", listing.sqft?.toLocaleString() || "—"],
-                  ["Parking", listing.parking || "—"],
-                  ["Storage", listing.storage_locker || "—"],
-                  ["Laundry", listing.in_suite_washer || "—"],
-                  ["Gym", listing.gym || "—"],
                   ["Pets", listing.pet_policy || "—"],
                   ["Added by", listing.added_by || "—"],
                   ["Messaged by", listing.messaged_by || "—"],
@@ -495,6 +749,27 @@ export default async function ListingDetailsPage({
                   </div>
                 ))}
               </div>
+              <ListingInlineEditPanel
+                listingId={listing.id}
+                title="Edit logistics"
+                fields={[
+                  { name: "listing_type", label: "Type", value: listing.listing_type },
+                  {
+                    name: "furnished",
+                    label: "Furnished",
+                    value: listing.furnished,
+                    type: "select",
+                    options: ["Unknown", "Yes", "No"],
+                  },
+                  {
+                    name: "earliest_move_in",
+                    label: "Move-in",
+                    value: listing.earliest_move_in,
+                    type: "date",
+                  },
+                  { name: "pet_policy", label: "Pets", value: listing.pet_policy },
+                ]}
+              />
             </section>
 
             <ListingNotesPanel
@@ -582,28 +857,24 @@ export default async function ListingDetailsPage({
               status={listing.status}
               sashaScore={listing.sasha_score}
               glebScore={listing.gleb_score}
+              scores={scores}
+              members={members}
             />
 
-            <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-              <p className="text-sm font-medium text-slate-500">Contact</p>
-              <h2 className="text-lg font-semibold text-slate-900">
-                {listing.contact_name || "Unknown contact"}
-              </h2>
-              <div className="mt-3 space-y-2 text-sm text-slate-700">
-                <p className="break-all">{listing.contact_email || "No email saved"}</p>
-                <p className="break-words">{listing.contact_phone || "No phone saved"}</p>
-                <p className="break-words">{listing.contact_medium || "No contact medium saved"}</p>
-                {listing.contact_details && (
-                  <p className="whitespace-pre-wrap break-words rounded-xl bg-slate-50 p-3">
-                    {listing.contact_details}
-                  </p>
-                )}
-              </div>
-              <ContactActions
-                email={listing.contact_email}
-                location={listing.formatted_address || listing.location}
-              />
-            </section>
+            <ListingMapPreview
+              latitude={listing.latitude}
+              longitude={listing.longitude}
+              formattedAddress={listing.formatted_address}
+              compact
+            />
+
+            <ContactInfoCard
+              name={listing.contact_name}
+              email={listing.contact_email}
+              phone={listing.contact_phone}
+              medium={listing.contact_medium}
+              details={listing.contact_details}
+            />
           </aside>
         </div>
       </div>

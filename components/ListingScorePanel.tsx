@@ -53,7 +53,7 @@ export default function ListingScorePanel({
           onChange={(e) => updateScore("sasha_score", e.target.value)}
           disabled={isSaving}
           className={`rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400 ${
-            currentUser === "Sasha" ? "border-blue-300" : "border-slate-200"
+            currentUser?.displayName === "Sasha" ? "border-blue-300" : "border-slate-200"
           } disabled:opacity-60`}
         >
           <option value="">Sasha score</option>
@@ -69,7 +69,7 @@ export default function ListingScorePanel({
           onChange={(e) => updateScore("gleb_score", e.target.value)}
           disabled={isSaving}
           className={`rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400 ${
-            currentUser === "Gleb" ? "border-blue-300" : "border-slate-200"
+            currentUser?.displayName === "Gleb" ? "border-blue-300" : "border-slate-200"
           } disabled:opacity-60`}
         >
           <option value="">Gleb score</option>

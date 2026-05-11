@@ -14,7 +14,26 @@ async function getListing(id: string) {
     return null;
   }
 
-  return data;
+  const { data: images, error: imagesError } = await supabase
+    .from("listing_images")
+    .select("id, image_url, position, source")
+    .eq("listing_id", id)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (imagesError) {
+    console.error("Error fetching listing images:", imagesError);
+  }
+
+  return {
+    ...data,
+    images: (images ?? []).map((image) => ({
+      id: image.id,
+      url: image.image_url,
+      position: image.position,
+      source: image.source,
+    })),
+  };
 }
 
 type EditPageProps = {

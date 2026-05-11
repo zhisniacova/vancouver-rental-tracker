@@ -44,10 +44,11 @@ function getSenderChipStyles(senderName: string | null) {
 
 export default function MessageHistory({ listingId, initialMessages }: Props) {
   const { currentUser } = useCurrentUser();
+  const currentUserName = currentUser?.displayName ?? "Me";
   const [messages, setMessages] = useState<MessageHistoryEntry[]>(
     sortByCreatedAtDescending(initialMessages)
   );
-  const [senderName, setSenderName] = useState<string>(currentUser);
+  const [senderName, setSenderName] = useState<string>(currentUserName);
   const [messageType, setMessageType] = useState<(typeof MESSAGE_TYPE_OPTIONS)[number]>(
     "Email"
   );
@@ -59,8 +60,6 @@ export default function MessageHistory({ listingId, initialMessages }: Props) {
     () => sortByCreatedAtDescending(messages),
     [messages]
   );
-
-  const otherUser = currentUser === "Sasha" ? "Gleb" : "Sasha";
 
   async function handleAddEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -134,8 +133,7 @@ export default function MessageHistory({ listingId, initialMessages }: Props) {
                 onChange={(e) => setSenderName(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
               >
-                <option value={currentUser}>{currentUser}</option>
-                <option value={otherUser}>{otherUser}</option>
+                <option value={currentUserName}>{currentUserName}</option>
                 <option value="Rental">Rental</option>
               </select>
             </div>

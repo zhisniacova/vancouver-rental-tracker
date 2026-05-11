@@ -9,6 +9,7 @@ import { useCurrentUser } from "./CurrentUserProvider";
 import { formatStatusLabel } from "./StatusBadge";
 import { useNeighborhoodOptions } from "./useNeighborhoodOptions";
 import { useWorkspace } from "./WorkspaceProvider";
+import { type ListingImage } from "@/lib/collaboration";
 
 type ListingStatus =
   | "to_process"
@@ -36,6 +37,7 @@ type AutofillListingResponse = Partial<{
   sqft: string;
   rawDescription: string;
   imageUrl: string;
+  imageUrls: string[];
   status: ListingStatus;
   viewingDate: string;
   contactName: string;
@@ -83,6 +85,10 @@ type ListingFormData = {
   imageUrl: string;
 };
 
+type FormImage =
+  | { kind: "url"; url: string }
+  | { kind: "file"; file: File; preview: string };
+
 type ExistingListing = {
   id: string;
   url: string | null;
@@ -118,6 +124,7 @@ type ExistingListing = {
   longitude?: number | null;
   formatted_address?: string | null;
   geocoded_at?: string | null;
+  images?: ListingImage[];
 };
 
 type Props = {
@@ -153,7 +160,7 @@ function FormSection({
 }
 
 function getInitialFormData(
-  currentUser: "Sasha" | "Gleb",
+  currentUser: string,
   existingListing?: ExistingListing
 ): ListingFormData {
   if (!existingListing) {
@@ -223,17 +230,29 @@ function getInitialFormData(
   };
 }
 
+function getInitialImages(existingListing?: ExistingListing): FormImage[] {
+  if (!existingListing) return [];
+  const urls =
+    existingListing.images?.map((image) => image.url).filter(Boolean) ??
+    (existingListing.cover_image_url ? [existingListing.cover_image_url] : []);
+  return urls.map((url) => ({ kind: "url" as const, url }));
+}
+
 export default function ListingForm({ existingListing }: Props) {
   const router = useRouter();
   const { currentUser } = useCurrentUser();
   const { currentRentalSearchId, currentWorkspace, isLoadingWorkspaces } =
     useWorkspace();
   const { neighborhoods, addNeighborhood } = useNeighborhoodOptions();
+  const currentUserName = currentUser?.displayName ?? "Unknown";
 
   const [formData, setFormData] = useState<ListingFormData>(
-    getInitialFormData(currentUser, existingListing)
+    getInitialFormData(currentUserName, existingListing)
   );
-  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
+  const [images, setImages] = useState<FormImage[]>(
+    getInitialImages(existingListing)
+  );
+  const [imageUrlInput, setImageUrlInput] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isAutofilling, setIsAutofilling] = useState(false);
   const [autofillCooldownUntil, setAutofillCooldownUntil] = useState(0);
@@ -243,17 +262,16 @@ export default function ListingForm({ existingListing }: Props) {
     if (!existingListing) {
       setFormData((current) => ({
         ...current,
-        addedBy: currentUser,
+        addedBy: currentUserName,
       }));
     }
-  }, [currentUser, existingListing]);
+  }, [currentUserName, existingListing]);
 
   const previewUrl = useMemo(() => {
-    if (coverImageFile) {
-      return URL.createObjectURL(coverImageFile);
-    }
-    return formData.imageUrl || "";
-  }, [coverImageFile, formData.imageUrl]);
+    const firstImage = images[0];
+    if (!firstImage) return "";
+    return firstImage.kind === "url" ? firstImage.url : firstImage.preview;
+  }, [images]);
 
   function handleChange(
     event: React.ChangeEvent<
@@ -275,8 +293,33 @@ export default function ListingForm({ existingListing }: Props) {
   }
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
-    setCoverImageFile(file);
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) return;
+
+    setImages((current) => [
+      ...current,
+      ...files.map((file) => ({
+        kind: "file" as const,
+        file,
+        preview: URL.createObjectURL(file),
+      })),
+    ]);
+    event.target.value = "";
+  }
+
+  function addImageUrl() {
+    const url = imageUrlInput.trim();
+    if (!url) return;
+    setImages((current) => [...current, { kind: "url", url }]);
+    setImageUrlInput("");
+  }
+
+  function removeImage(index: number) {
+    setImages((current) => {
+      const image = current[index];
+      if (image?.kind === "file") URL.revokeObjectURL(image.preview);
+      return current.filter((_, imageIndex) => imageIndex !== index);
+    });
   }
 
   function mergeAutofillData(data: AutofillListingResponse) {
@@ -314,8 +357,24 @@ export default function ListingForm({ existingListing }: Props) {
       };
     });
 
-    if (data.imageUrl) {
-      setCoverImageFile(null);
+    const autofillImages = data.imageUrls?.length
+      ? data.imageUrls
+      : data.imageUrl?.trim()
+        ? [data.imageUrl.trim()]
+        : [];
+
+    if (autofillImages.length > 0) {
+      setImages((current) => {
+        const existingUrls = new Set(
+          current
+            .filter((image): image is { kind: "url"; url: string } => image.kind === "url")
+            .map((image) => image.url)
+        );
+        const nextImages = autofillImages
+          .filter((imageUrl) => imageUrl && !existingUrls.has(imageUrl))
+          .map((imageUrl) => ({ kind: "url" as const, url: imageUrl }));
+        return nextImages.length > 0 ? [...nextImages, ...current] : current;
+      });
     }
   }
 
@@ -356,6 +415,23 @@ export default function ListingForm({ existingListing }: Props) {
       }
 
       mergeAutofillData(data as AutofillListingResponse);
+      if (
+        existingListing &&
+        (data as AutofillListingResponse).location?.trim()
+      ) {
+        const location = (data as AutofillListingResponse).location?.trim();
+        void supabase
+          .from("listings")
+          .update({ location })
+          .eq("id", existingListing.id)
+          .then(() =>
+            fetch("/api/geocode-listing", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ listingId: existingListing.id }),
+            })
+          );
+      }
       setAutofillCooldownUntil(Date.now() + 10_000);
 
       const warnings =
@@ -378,30 +454,37 @@ export default function ListingForm({ existingListing }: Props) {
     }
   }
 
-  async function uploadCoverImage(): Promise<string | null> {
-    if (!coverImageFile) {
-      return formData.imageUrl.trim() || null;
+  async function uploadImages(): Promise<string[]> {
+    const result: string[] = [];
+
+    for (const image of images) {
+      if (image.kind === "url") {
+        result.push(image.url);
+        continue;
+      }
+
+      const fileExt = image.file.name.split(".").pop();
+      const fileName = `${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}.${fileExt}`;
+      const filePath = `covers/${fileName}`;
+
+      const { error } = await supabase.storage
+        .from("listing-images")
+        .upload(filePath, image.file);
+
+      if (error) {
+        throw error;
+      }
+
+      const { data } = supabase.storage
+        .from("listing-images")
+        .getPublicUrl(filePath);
+
+      result.push(data.publicUrl);
     }
 
-    const fileExt = coverImageFile.name.split(".").pop();
-    const fileName = `${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2)}.${fileExt}`;
-    const filePath = `covers/${fileName}`;
-
-    const { error } = await supabase.storage
-      .from("listing-images")
-      .upload(filePath, coverImageFile);
-
-    if (error) {
-      throw error;
-    }
-
-    const { data } = supabase.storage
-      .from("listing-images")
-      .getPublicUrl(filePath);
-
-    return data.publicUrl;
+    return result;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -422,7 +505,8 @@ export default function ListingForm({ existingListing }: Props) {
         await addNeighborhood(cleanedNeighborhood);
       }
 
-      const coverImageUrl = await uploadCoverImage();
+      const imageUrls = await uploadImages();
+      const coverImageUrl = imageUrls[0] ?? null;
 
       const payload = {
         url: formData.url,
@@ -460,6 +544,8 @@ export default function ListingForm({ existingListing }: Props) {
           : currentRentalSearchId,
       };
 
+      let savedListingId = existingListing?.id ?? null;
+
       if (existingListing) {
         const { error } = await supabase
           .from("listings")
@@ -468,13 +554,44 @@ export default function ListingForm({ existingListing }: Props) {
 
         if (error) throw error;
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("listings")
           .insert([payload])
           .select("id")
           .single();
 
         if (error) throw error;
+        savedListingId = data.id;
+      }
+
+      if (savedListingId) {
+        await supabase
+          .from("listing_images")
+          .delete()
+          .eq("listing_id", savedListingId);
+
+        if (imageUrls.length > 0) {
+          const { error: imageError } = await supabase
+            .from("listing_images")
+            .insert(
+              imageUrls.map((imageUrl, index) => ({
+                listing_id: savedListingId,
+                image_url: imageUrl,
+                position: index,
+                source: "manual",
+              }))
+            );
+
+          if (imageError) throw imageError;
+        }
+
+        if (formData.location.trim()) {
+          await fetch("/api/geocode-listing", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ listingId: savedListingId }),
+          });
+        }
       }
 
       router.push("/");
@@ -930,19 +1047,56 @@ export default function ListingForm({ existingListing }: Props) {
       </FormSection>
 
       <FormSection title="Images">
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="space-y-4">
+          {images.length > 0 && (
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {images.map((image, index) => (
+                <div
+                  key={`${image.kind}-${index}`}
+                  className="relative h-28 w-36 flex-none overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
+                >
+                  <img
+                    src={image.kind === "url" ? image.url : image.preview}
+                    alt={`Listing image ${index + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+                  {index === 0 && (
+                    <span className="absolute bottom-1 left-1 rounded-full bg-slate-900/75 px-2 py-0.5 text-[10px] font-semibold text-white">
+                      Cover
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeImage(index)}
+                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-sm font-bold text-slate-700 shadow-sm hover:bg-white"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {images.length === 0 && (
+            <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500">
+              No images added yet.
+            </p>
+          )}
+
+          <div className="grid gap-5 md:grid-cols-2">
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
-              Upload cover image
+              Upload images
             </label>
             <input
               type="file"
               accept="image/*"
+              multiple
               onChange={handleFileChange}
               className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900"
             />
             <p className="mt-2 text-xs text-slate-500">
-              Uploading a file will override the pasted image URL.
+              First image becomes the dashboard cover.
             </p>
           </div>
 
@@ -950,14 +1104,28 @@ export default function ListingForm({ existingListing }: Props) {
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Or paste image URL
             </label>
-            <input
-              name="imageUrl"
-              type="url"
-              value={formData.imageUrl}
-              onChange={handleChange}
-              placeholder="https://..."
-              className={fieldClassName}
-            />
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={imageUrlInput}
+                onChange={(event) => setImageUrlInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addImageUrl();
+                  }
+                }}
+                placeholder="https://..."
+                className={fieldClassName}
+              />
+              <button
+                type="button"
+                onClick={addImageUrl}
+                className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white hover:bg-slate-700"
+              >
+                Add
+              </button>
+            </div>
           </div>
 
           <div className="md:col-span-2">
@@ -979,6 +1147,7 @@ export default function ListingForm({ existingListing }: Props) {
                 </div>
               )}
             </div>
+          </div>
           </div>
         </div>
       </FormSection>

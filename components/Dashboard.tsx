@@ -8,6 +8,14 @@ import DashboardMapView from "./DashboardMapView";
 import FilterBar from "./FilterBar";
 import { supabase } from "@/lib/supabase";
 import { type FrequentPlace } from "@/lib/commute";
+import {
+  getAverageCollaboratorScore,
+  type WorkspaceMember,
+} from "@/lib/collaboration";
+import {
+  type MemberCriterionPreference,
+  type WorkspaceCriterion,
+} from "@/lib/customCriteria";
 import { useCurrentUser } from "./CurrentUserProvider";
 import { useWorkspace } from "./WorkspaceProvider";
 
@@ -22,9 +30,15 @@ type Props = {
   listings: Listing[];
   initialFilters: DashboardInitialFilters;
   frequentPlaces: FrequentPlace[];
+  workspaceMembers: WorkspaceMember[];
+  workspaceCriteria: WorkspaceCriterion[];
+  memberCriteriaPreferences: MemberCriterionPreference[];
 };
 
 function getAverageScore(listing: Listing) {
+  const collaboratorAverage = getAverageCollaboratorScore(listing.scores);
+  if (collaboratorAverage !== null) return collaboratorAverage;
+
   const scores = [listing.sashaScore, listing.glebScore].filter(
     (score): score is number =>
       score !== null && score !== undefined && score > 0
@@ -63,6 +77,10 @@ function isRecentlyAdded(createdAt?: string | null) {
 }
 
 function hasBothScores(listing: Listing) {
+  if (listing.scores?.length) {
+    return listing.scores.filter((score) => (score.score ?? 0) > 0).length >= 2;
+  }
+
   return (
     (listing.sashaScore ?? 0) > 0 &&
     (listing.glebScore ?? 0) > 0
@@ -92,7 +110,8 @@ type ExtendedActionTag = ActionTag | "Duplicate";
 
 function getActionTagsForUser(
   listing: Listing,
-  currentUser: "Sasha" | "Gleb",
+  currentUserId: string | null,
+  currentUserName: string | null,
   duplicateUrls: Set<string>
 ): ExtendedActionTag[] {
   if (listing.status === "expired" || listing.status === "to_process") return [];
@@ -104,12 +123,14 @@ function getActionTagsForUser(
     tags.push("Duplicate");
   }
 
-  const addedByOtherUser =
-    listing.addedBy === "Sasha" || listing.addedBy === "Gleb"
-      ? listing.addedBy !== currentUser
-      : false;
-  const currentUserScore =
-    currentUser === "Sasha" ? listing.sashaScore ?? 0 : listing.glebScore ?? 0;
+  const addedByOtherUser = Boolean(
+    listing.addedBy &&
+      listing.addedBy !== currentUserId &&
+      listing.addedBy !== currentUserName
+  );
+  const currentUserScore = currentUserId
+    ? listing.scores?.find((score) => score.userId === currentUserId)?.score ?? 0
+    : 0;
 
   if (addedByOtherUser && currentUserScore <= 0) {
     tags.push("Review");
@@ -339,7 +360,7 @@ function ToProcessQueue({
   listings: Listing[];
   currentRentalSearchId: string | null;
   currentWorkspaceName: string | null;
-  currentUser: "Sasha" | "Gleb";
+  currentUser: string;
   isLoadingWorkspaces: boolean;
 }) {
   const router = useRouter();
@@ -501,6 +522,9 @@ export default function Dashboard({
   listings,
   initialFilters,
   frequentPlaces,
+  workspaceMembers,
+  workspaceCriteria,
+  memberCriteriaPreferences,
 }: Props) {
   const { currentUser } = useCurrentUser();
   const { currentRentalSearchId, currentWorkspace, isLoadingWorkspaces } =
@@ -548,6 +572,21 @@ export default function Dashboard({
         (place) => place.rentalSearchId === currentRentalSearchId
       )
     : frequentPlaces;
+  const currentWorkspaceMembers = currentRentalSearchId
+    ? workspaceMembers.filter(
+        (member) => member.rentalSearchId === currentRentalSearchId
+      )
+    : workspaceMembers;
+  const currentCriteria = currentRentalSearchId
+    ? workspaceCriteria.filter(
+        (criterion) => criterion.rentalSearchId === currentRentalSearchId
+      )
+    : workspaceCriteria;
+  const currentMemberCriteriaPreferences = currentRentalSearchId
+    ? memberCriteriaPreferences.filter(
+        (preference) => preference.rentalSearchId === currentRentalSearchId
+      )
+    : memberCriteriaPreferences;
 
   const filtered = workspaceListings
     .filter((listing) => {
@@ -593,7 +632,12 @@ export default function Dashboard({
 
   const actionItems = filtered
     .map((listing) => {
-      const tags = getActionTagsForUser(listing, currentUser, duplicateUrls);
+      const tags = getActionTagsForUser(
+        listing,
+        currentUser?.id ?? null,
+        currentUser?.displayName ?? null,
+        duplicateUrls
+      );
       const duplicateGroupKey = normalizeListingUrl(listing.url);
 
       return {
@@ -657,7 +701,7 @@ export default function Dashboard({
         listings={toProcessListings}
         currentRentalSearchId={currentRentalSearchId}
         currentWorkspaceName={currentWorkspace?.name ?? null}
-        currentUser={currentUser}
+        currentUser={currentUser?.displayName ?? "Unknown"}
         isLoadingWorkspaces={isLoadingWorkspaces}
       />
 
@@ -775,6 +819,9 @@ export default function Dashboard({
               listing={listing}
               preferences={currentWorkspace?.criteriaPreferences}
               frequentPlaces={currentFrequentPlaces}
+              workspaceMembers={currentWorkspaceMembers}
+              workspaceCriteria={currentCriteria}
+              memberCriteriaPreferences={currentMemberCriteriaPreferences}
               detailHref={getDetailHref(listing.id, filteredIds.indexOf(listing.id))}
               onOpenDetails={rememberDashboardScroll}
             />

@@ -2,6 +2,7 @@ type Props = {
   latitude: number | null;
   longitude: number | null;
   formattedAddress?: string | null;
+  compact?: boolean;
 };
 
 function buildOpenStreetMapEmbedUrl(latitude: number, longitude: number) {
@@ -26,6 +27,7 @@ export default function ListingMapPreview({
   latitude,
   longitude,
   formattedAddress,
+  compact = false,
 }: Props) {
   if (latitude === null || longitude === null) {
     return null;
@@ -38,10 +40,12 @@ export default function ListingMapPreview({
 
   return (
     <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-      <div className="flex flex-col gap-2 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
+      <div className={`flex flex-col gap-2 p-4 ${compact ? "" : "sm:flex-row sm:items-start sm:justify-between sm:p-5"}`}>
         <div>
           <p className="text-sm font-medium text-slate-500">Location</p>
-          <h2 className="text-xl font-semibold text-slate-900">Map Preview</h2>
+          <h2 className={`${compact ? "text-lg" : "text-xl"} font-semibold text-slate-900`}>
+            Map Preview
+          </h2>
           <p className="mt-1 text-sm text-slate-600">
             {formattedAddress || "Geocoded listing location"}
           </p>
@@ -58,7 +62,7 @@ export default function ListingMapPreview({
       <iframe
         title="Listing map preview"
         src={mapSrc}
-        className="h-64 w-full border-0 sm:h-80"
+        className={`${compact ? "h-44" : "h-64 sm:h-80"} w-full border-0`}
         loading="lazy"
       />
     </section>

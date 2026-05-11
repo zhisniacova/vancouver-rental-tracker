@@ -5,12 +5,8 @@ import { revalidatePath } from "next/cache";
 import { getAuthenticatedSupabaseClient } from "@/lib/auth";
 import { geocodeAddress } from "@/lib/geocoding";
 import {
-  CRITERIA_LABELS,
   DEFAULT_RENTAL_PREFERENCES,
-  IMPORTANCE_LEVELS,
   parseOptionalPositiveNumber,
-  type CriteriaKey,
-  type ImportanceLevel,
   type RentalCriteriaPreferences,
 } from "@/lib/rentalPreferences";
 
@@ -34,6 +30,12 @@ export type FrequentPlaceFormState = {
   message?: string;
 };
 
+export type CreateWorkspaceFormState = {
+  error?: string;
+  message?: string;
+  workspaceId?: string;
+};
+
 function getOptionalString(formData: FormData, key: string) {
   const value = formData.get(key);
   if (typeof value !== "string") return null;
@@ -54,29 +56,69 @@ export async function updateProfile(
   formData: FormData
 ): Promise<SettingsFormState> {
   const { supabase, user } = await getAuthenticatedSupabaseClient();
+  const section = getOptionalString(formData, "settingsSection");
 
-  const { error } = await supabase.from("profiles").upsert(
-    {
-      id: user.id,
-      nickname: getOptionalString(formData, "nickname"),
-      full_name: getOptionalString(formData, "fullName"),
-      phone_number: getOptionalString(formData, "phoneNumber"),
-      about_us: getOptionalString(formData, "aboutUs"),
-      preferred_email_provider: getPreferredEmailProvider(formData),
-      default_message_template: getOptionalString(
-        formData,
-        "defaultMessageTemplate"
-      ),
-    },
-    { onConflict: "id" }
-  );
+  const updates =
+    section === "message"
+      ? {
+          id: user.id,
+          about_us: getOptionalString(formData, "aboutUs"),
+          default_message_template: getOptionalString(
+            formData,
+            "defaultMessageTemplate"
+          ),
+        }
+      : {
+          id: user.id,
+          nickname: getOptionalString(formData, "nickname"),
+          full_name: getOptionalString(formData, "fullName"),
+          phone_number: getOptionalString(formData, "phoneNumber"),
+          contact_email: getOptionalString(formData, "contactEmail"),
+          preferred_email_provider: getPreferredEmailProvider(formData),
+        };
+
+  const { error } = await supabase
+    .from("profiles")
+    .upsert(updates, { onConflict: "id" });
 
   if (error) {
     return { error: error.message };
   }
 
   revalidatePath("/settings");
-  return { message: "Settings saved." };
+  return {
+    message:
+      section === "message"
+        ? "Message template saved."
+        : "Profile saved.",
+  };
+}
+
+export async function createWorkspace(
+  _prevState: CreateWorkspaceFormState,
+  formData: FormData
+): Promise<CreateWorkspaceFormState> {
+  const { supabase } = await getAuthenticatedSupabaseClient();
+  const workspaceName = getOptionalString(formData, "workspaceName");
+
+  if (!workspaceName) {
+    return { error: "Workspace name is required." };
+  }
+
+  const { data, error } = await supabase.rpc("create_rental_search", {
+    search_name: workspaceName,
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/settings");
+  return {
+    message: "Workspace created.",
+    workspaceId: typeof data === "string" ? data : undefined,
+  };
 }
 
 export async function createInviteLink(
@@ -118,15 +160,6 @@ export async function createInviteLink(
   return { inviteLink: `/join?token=${encodeURIComponent(token)}` };
 }
 
-function getImportance(formData: FormData, key: CriteriaKey): ImportanceLevel {
-  const value = formData.get(`criteria_${key}`);
-
-  return typeof value === "string" &&
-    IMPORTANCE_LEVELS.includes(value as ImportanceLevel)
-    ? (value as ImportanceLevel)
-    : DEFAULT_RENTAL_PREFERENCES.criteria[key];
-}
-
 export async function updateRentalPreferences(
   _prevState: RentalPreferencesFormState,
   formData: FormData
@@ -143,15 +176,19 @@ export async function updateRentalPreferences(
     return { error: "Workspace name is required." };
   }
 
-  const criteriaKeys = Object.keys(CRITERIA_LABELS) as CriteriaKey[];
+  const { data: existingSearch } = await supabase
+    .from("rental_searches")
+    .select("criteria_preferences")
+    .eq("id", rentalSearchId)
+    .maybeSingle();
+  const existingPreferences =
+    existingSearch?.criteria_preferences &&
+    typeof existingSearch.criteria_preferences === "object"
+      ? (existingSearch.criteria_preferences as RentalCriteriaPreferences)
+      : DEFAULT_RENTAL_PREFERENCES;
+
   const preferences: RentalCriteriaPreferences = {
-    criteria: criteriaKeys.reduce(
-      (acc, key) => ({
-        ...acc,
-        [key]: getImportance(formData, key),
-      }),
-      {} as RentalCriteriaPreferences["criteria"]
-    ),
+    criteria: existingPreferences.criteria ?? DEFAULT_RENTAL_PREFERENCES.criteria,
     maxRent: parseOptionalPositiveNumber(formData.get("maxRent")),
     targetSqft: parseOptionalPositiveNumber(formData.get("targetSqft")),
     minimumSqft: parseOptionalPositiveNumber(formData.get("minimumSqft")),
@@ -182,6 +219,12 @@ export async function addFrequentPlace(
   const rentalSearchId = getOptionalString(formData, "rentalSearchId");
   const name = getOptionalString(formData, "placeName");
   const address = getOptionalString(formData, "placeAddress");
+  const maxDriveMinutes = parseOptionalPositiveNumber(
+    formData.get("maxDriveMinutes")
+  );
+  const maxTransitMinutes = parseOptionalPositiveNumber(
+    formData.get("maxTransitMinutes")
+  );
 
   if (!rentalSearchId) {
     return { error: "Choose a workspace before adding a frequent place." };
@@ -202,6 +245,8 @@ export async function addFrequentPlace(
         longitude: geocoded.longitude,
         formatted_address: geocoded.formattedAddress,
         geocoded_at: new Date().toISOString(),
+        max_drive_minutes: maxDriveMinutes,
+        max_transit_minutes: maxTransitMinutes,
       },
     ]);
 

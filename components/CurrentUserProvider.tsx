@@ -7,12 +7,18 @@ import {
   useState,
   ReactNode,
 } from "react";
+import { supabase } from "@/lib/supabase";
 
-export type CurrentUser = "Sasha" | "Gleb";
+export type CurrentUser = {
+  id: string;
+  displayName: string;
+  email: string;
+  phoneNumber: string | null;
+};
 
 type CurrentUserContextType = {
-  currentUser: CurrentUser;
-  setCurrentUser: (user: CurrentUser) => void;
+  currentUser: CurrentUser | null;
+  isLoadingCurrentUser: boolean;
 };
 
 const CurrentUserContext = createContext<CurrentUserContextType | undefined>(
@@ -20,32 +26,72 @@ const CurrentUserContext = createContext<CurrentUserContextType | undefined>(
 );
 
 export function CurrentUserProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUserState] = useState<CurrentUser>("Sasha");
-  const [mounted, setMounted] = useState(false);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [isLoadingCurrentUser, setIsLoadingCurrentUser] = useState(true);
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const savedUser = localStorage.getItem("currentUser");
-      if (savedUser === "Sasha" || savedUser === "Gleb") {
-        setCurrentUserState(savedUser);
+    let cancelled = false;
+
+    async function loadCurrentUser() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        if (!cancelled) {
+          setCurrentUser(null);
+          setIsLoadingCurrentUser(false);
+        }
+        return;
       }
-      setMounted(true);
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("nickname, full_name, phone_number, contact_email")
+        .eq("id", user.id)
+        .maybeSingle();
+      const metadata = user.user_metadata as {
+        nickname?: string | null;
+        full_name?: string | null;
+      };
+
+      if (!cancelled) {
+        setCurrentUser({
+          id: user.id,
+          displayName:
+            profile?.nickname ||
+            profile?.full_name ||
+            metadata?.nickname ||
+            metadata?.full_name ||
+            user.email ||
+            "Current user",
+          email: profile?.contact_email || user.email || "",
+          phoneNumber: profile?.phone_number ?? null,
+        });
+        setIsLoadingCurrentUser(false);
+      }
+    }
+
+    void loadCurrentUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      void loadCurrentUser();
     });
 
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  function setCurrentUser(user: CurrentUser) {
-    setCurrentUserState(user);
-    localStorage.setItem("currentUser", user);
-  }
-
-  if (!mounted) {
+  if (isLoadingCurrentUser) {
     return null;
   }
 
   return (
-    <CurrentUserContext.Provider value={{ currentUser, setCurrentUser }}>
+    <CurrentUserContext.Provider value={{ currentUser, isLoadingCurrentUser }}>
       {children}
     </CurrentUserContext.Provider>
   );

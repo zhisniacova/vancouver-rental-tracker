@@ -6,6 +6,8 @@ export type FrequentPlace = {
   latitude: number | null;
   longitude: number | null;
   formattedAddress: string | null;
+  maxDriveMinutes: number | null;
+  maxTransitMinutes: number | null;
 };
 
 export type ListingLocation = {
@@ -17,11 +19,16 @@ export type CommuteSummary = {
   place: FrequentPlace;
   distanceKm: number;
   estimatedDrivingMinutes: number;
+  estimatedTransitMinutes: number;
+  exceedsDriveLimit: boolean;
+  exceedsTransitLimit: boolean;
 };
 
 const EARTH_RADIUS_KM = 6371;
 const ROAD_FACTOR = 1.3;
 const CITY_DRIVING_KMH = 35;
+const CITY_TRANSIT_KMH = 22;
+const TRANSIT_BUFFER_MINUTES = 8;
 
 function toRadians(value: number) {
   return (value * Math.PI) / 180;
@@ -78,11 +85,22 @@ export function getCommuteSummaries(
         3,
         Math.round((distanceKm / CITY_DRIVING_KMH) * 60)
       );
+      const estimatedTransitMinutes = Math.max(
+        5,
+        Math.round((distanceKm / CITY_TRANSIT_KMH) * 60 + TRANSIT_BUFFER_MINUTES)
+      );
 
       return {
         place,
         distanceKm,
         estimatedDrivingMinutes,
+        estimatedTransitMinutes,
+        exceedsDriveLimit:
+          typeof place.maxDriveMinutes === "number" &&
+          estimatedDrivingMinutes > place.maxDriveMinutes,
+        exceedsTransitLimit:
+          typeof place.maxTransitMinutes === "number" &&
+          estimatedTransitMinutes > place.maxTransitMinutes,
       };
     })
     .sort((a, b) => a.estimatedDrivingMinutes - b.estimatedDrivingMinutes);

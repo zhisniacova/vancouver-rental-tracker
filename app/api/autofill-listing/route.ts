@@ -28,6 +28,7 @@ type AutofillListingData = {
   sqft: string;
   rawDescription: string;
   imageUrl: string;
+  imageUrls: string[];
   status: ListingStatus;
   viewingDate: string;
   contactName: string;
@@ -100,6 +101,7 @@ function emptyListingData(): AutofillListingData {
     sqft: "",
     rawDescription: "",
     imageUrl: "",
+    imageUrls: [],
     status: "new",
     viewingDate: "",
     contactName: "",
@@ -178,6 +180,58 @@ function getMetaContent(html: string, names: string[]) {
   }
 
   return "";
+}
+
+const IMAGE_NOISE_PATTERN =
+  /\b(?:icon|logo|avatar|badge|sprite|pixel|1x1)\b|\/(icons?|logos?|avatars?|sprites?)\//i;
+
+function normalizeImageUrl(rawUrl: string) {
+  let url = decodeHtml(rawUrl).trim();
+  if (!url) return "";
+  if (url.startsWith("//")) url = `https:${url}`;
+  if (url.includes("images.craigslist.org")) {
+    url = url.replace(
+      /_(50x50c|100x100|300x300|600x450|600x600)(\.\w+)$/i,
+      "_1200x900$2"
+    );
+  }
+  return url;
+}
+
+function extractListingImages(html: string) {
+  const images: string[] = [];
+  const seen = new Set<string>();
+
+  function add(url: string) {
+    const normalized = normalizeImageUrl(url);
+    if (!normalized || IMAGE_NOISE_PATTERN.test(normalized) || seen.has(normalized)) {
+      return;
+    }
+    seen.add(normalized);
+    images.push(normalized);
+  }
+
+  const metaImage = getMetaContent(html, [
+    "og:image",
+    "twitter:image",
+    "twitter:image:src",
+  ]);
+  if (metaImage) add(metaImage);
+
+  for (const match of html.matchAll(
+    /https?:\/\/images\.craigslist\.org\/[A-Za-z0-9_]+\.(?:jpg|jpeg|png|webp)/gi
+  )) {
+    add(match[0]);
+  }
+
+  for (const match of html.matchAll(
+    /"(https?:\/\/[^"\\]{10,250}\.(?:jpg|jpeg|png|webp)(?:[?][^"\\]{0,120})?)"/gi
+  )) {
+    add(match[1]);
+    if (images.length >= 20) break;
+  }
+
+  return images.slice(0, 20);
 }
 
 function extractDescription(html: string) {
@@ -421,11 +475,11 @@ function inferAmenityValues(attrText: string) {
         : "Unknown";
 
   const inSuiteWasher: AmenityValue =
-    /\b(w\/d in unit|washer\/dryer in unit|in-unit laundry|laundry in unit)\b/i.test(
+    /\b(w\/d in unit|washer\/dryer in unit|in-unit laundry|laundry in unit|in suite laundry|in-suite laundry|ensuite laundry)\b/i.test(
       text
     )
       ? "Yes"
-      : /\b(laundry in bldg|shared laundry|coin op laundry|no laundry)\b/i.test(
+      : /\b(laundry in bldg|shared laundry|coin op laundry|coin laundry|laundry room|laundry on (the )?floor|no laundry)\b/i.test(
             text
           )
         ? "No"
@@ -547,9 +601,11 @@ function inferFromDescription(rawDescription: string, postedAt: string) {
       : "Unknown";
 
   const inSuiteWasher: AmenityValue =
-    /\b(washer\/dryer|washer and dryer|w\/d in unit|in-unit laundry)\b/i.test(text)
-      ? "Yes"
-      : "Unknown";
+    /\b(shared laundry|coin laundry|coin op laundry|laundry room|laundry on (the )?floor|floor laundry)\b/i.test(text)
+      ? "No"
+      : /\b(washer\/dryer|washer and dryer|w\/d in unit|in-unit laundry|in suite laundry|in-suite laundry|ensuite laundry|in unit washer|washer dryer in suite)\b/i.test(text)
+        ? "Yes"
+        : "Unknown";
 
   const storageLocker: AmenityValue =
     /\b(storage locker|storage included|1 storage|storage for your extras)\b/i.test(text)
@@ -785,7 +841,7 @@ async function enrichWithAi(
           {
             role: "system",
             content:
-              "Extract rental listing facts from the provided description. Prefer explicit statements only. Return Unknown when the description does not clearly say Yes or No. Do not infer amenities from neighborhood or vibes. earliestMoveIn must be YYYY-MM-DD or empty. viewingDate must be YYYY-MM-DDTHH:mm or empty. If viewing date text omits year, infer year from posted date context. If the text says a showing/viewing time is scheduled, set status to viewing_scheduled; otherwise use new. For Facebook Marketplace hidden contact info, use contactMedium Website and summarize it in contactDetails.",
+              "Extract rental listing facts from the provided description. Prefer explicit statements only. Return Unknown when the description does not clearly say Yes or No. Do not infer amenities from neighborhood or vibes. inSuiteWasher means in-suite/in-unit/ensuite laundry only; shared laundry, laundry room, coin laundry, or laundry on the floor must be No, not Yes. earliestMoveIn must be YYYY-MM-DD or empty. viewingDate must be YYYY-MM-DDTHH:mm or empty. If viewing date text omits year, infer year from posted date context. If the text says a showing/viewing time is scheduled, set status to viewing_scheduled; otherwise use new. For Facebook Marketplace hidden contact info, use contactMedium Website and summarize it in contactDetails.",
           },
           {
             role: "user",
@@ -936,11 +992,8 @@ function scrapeListing(html: string): AutofillListingData {
     data.location = extractAddress(data.rawDescription);
   }
 
-  data.imageUrl = getMetaContent(html, [
-    "og:image",
-    "twitter:image",
-    "twitter:image:src",
-  ]);
+  data.imageUrls = extractListingImages(html);
+  data.imageUrl = data.imageUrls[0] ?? "";
 
   data.sqft = extractSqft(attrText) || extractSqft(combinedText) || extractSqft(data.rawDescription);
   data.earliestMoveIn =
