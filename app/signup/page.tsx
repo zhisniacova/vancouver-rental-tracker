@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
-import AuthForm from "@/components/AuthForm";
-import { getCurrentUser } from "@/lib/auth";
+import LandingPage from "@/components/LandingPage";
+import { getAuthenticatedSupabaseClientOrNull } from "@/lib/auth";
 
 type SignupPageProps = {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ auth?: string; next?: string }>;
 };
 
 function getSafeRedirect(path?: string) {
@@ -13,16 +13,27 @@ function getSafeRedirect(path?: string) {
 }
 
 export default async function SignupPage({ searchParams }: SignupPageProps) {
-  const { next } = await searchParams;
-  const user = await getCurrentUser();
+  const { auth: authMode, next } = await searchParams;
+  const auth = await getAuthenticatedSupabaseClientOrNull();
 
-  if (user) {
+  if (auth) {
+    const { data: profile } = await auth.supabase
+      .from("profiles")
+      .select("onboarding_completed")
+      .eq("id", auth.user.id)
+      .maybeSingle();
+
+    if (!profile?.onboarding_completed) {
+      redirect("/onboarding");
+    }
+
     redirect(getSafeRedirect(next));
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6 py-8">
-      <AuthForm mode="signup" redirectTo={next} />
-    </main>
+    <LandingPage
+      authMode={authMode === "login" || authMode === "signup" ? authMode : "signup"}
+      redirectTo={next}
+    />
   );
 }

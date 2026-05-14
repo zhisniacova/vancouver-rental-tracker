@@ -20,9 +20,15 @@ function getSafeRedirect(path?: string) {
 
 function authLink(path: "/login" | "/signup", redirectTo?: string) {
   const safeRedirect = getSafeRedirect(redirectTo);
-  return safeRedirect === "/"
-    ? path
-    : `${path}?next=${encodeURIComponent(safeRedirect)}`;
+  const params = new URLSearchParams({
+    auth: path === "/login" ? "login" : "signup",
+  });
+
+  if (safeRedirect !== "/") {
+    params.set("next", safeRedirect);
+  }
+
+  return `${path}?${params.toString()}`;
 }
 
 export default function AuthForm({ mode, redirectTo }: Props) {
@@ -89,9 +95,7 @@ export default function AuthForm({ mode, redirectTo }: Props) {
       return;
     }
 
-    router.push(
-      isSignup && !redirectTo ? "/settings" : getSafeRedirect(redirectTo)
-    );
+    router.push(isSignup && !redirectTo ? "/onboarding" : getSafeRedirect(redirectTo));
     router.refresh();
   }
 
@@ -102,7 +106,7 @@ export default function AuthForm({ mode, redirectTo }: Props) {
     >
       <div className="mb-6">
         <p className="text-sm font-medium text-slate-500">
-          Vancouver Rental Tracker
+          Rental Search Tracker
         </p>
         <h1 className="text-3xl font-bold text-slate-900">
           {isSignup ? "Create account" : "Log in"}
