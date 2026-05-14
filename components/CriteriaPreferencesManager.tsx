@@ -204,7 +204,7 @@ export default function CriteriaPreferencesManager() {
   }
 
   return (
-    <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+    <section className="rounded-[1.75rem] bg-white p-5 shadow-sm sm:p-6">
       <div className="mb-5">
         <p className="text-sm font-medium text-slate-500">
           {currentWorkspace?.name ?? "No workspace selected"}
@@ -259,7 +259,7 @@ export default function CriteriaPreferencesManager() {
           {activeCriteria.map((criterion) => (
             <div
               key={criterion.id}
-              className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+              className="rounded-2xl bg-slate-50 p-4"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>

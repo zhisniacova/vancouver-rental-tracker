@@ -93,20 +93,20 @@ export default function SettingsForm({ profile, email }: Props) {
     <div className="space-y-6">
       <form
         action={profileAction}
-        className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200"
+        className="rounded-[1.75rem] bg-white p-5 shadow-sm sm:p-6"
       >
         <input type="hidden" name="settingsSection" value="profile" />
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-sm font-medium text-slate-500">{email}</p>
-            <h2 className="text-2xl font-bold text-slate-900">Profile</h2>
+            <h2 className="text-2xl font-bold tracking-tight text-slate-950">Profile</h2>
           </div>
           <div className="flex gap-2">
             {!isEditingProfile && (
               <button
                 type="button"
                 onClick={() => setIsEditingProfile(true)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200"
               >
                 Edit
               </button>
@@ -115,7 +115,7 @@ export default function SettingsForm({ profile, email }: Props) {
               <button
                 type="submit"
                 disabled={profilePending}
-                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60"
+                className="rounded-2xl bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-60"
               >
                 {profilePending ? "Saving..." : "Save profile"}
               </button>
@@ -250,13 +250,13 @@ export default function SettingsForm({ profile, email }: Props) {
       <form
         id="message-template"
         action={templateAction}
-        className="scroll-mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200"
+        className="scroll-mt-6 rounded-[1.75rem] bg-white p-5 shadow-sm sm:p-6"
       >
         <input type="hidden" name="settingsSection" value="message" />
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-sm font-medium text-slate-500">Defaults</p>
-            <h2 className="text-2xl font-bold text-slate-900">
+            <h2 className="text-2xl font-bold tracking-tight text-slate-950">
               Message Template
             </h2>
           </div>
@@ -265,7 +265,7 @@ export default function SettingsForm({ profile, email }: Props) {
               <button
                 type="button"
                 onClick={() => setIsEditingTemplate(true)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200"
               >
                 Edit
               </button>
@@ -274,7 +274,7 @@ export default function SettingsForm({ profile, email }: Props) {
               <button
                 type="submit"
                 disabled={templatePending}
-                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60"
+                className="rounded-2xl bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-60"
               >
                 {templatePending ? "Saving..." : "Save template"}
               </button>
@@ -282,8 +282,8 @@ export default function SettingsForm({ profile, email }: Props) {
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)] lg:items-stretch">
-          <div className="flex flex-col gap-5">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)] lg:items-stretch">
+          <div className="flex flex-col gap-4">
             <div>
               <label
                 htmlFor="aboutUs"
@@ -325,13 +325,13 @@ export default function SettingsForm({ profile, email }: Props) {
                 value={messageTemplate}
                 onChange={(event) => setMessageTemplate(event.target.value)}
                 disabled={!isEditingTemplate || templatePending}
-                className="min-h-[42rem] w-full flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm text-slate-900 outline-none focus:border-slate-400 disabled:bg-slate-50 disabled:text-slate-500"
+                className="min-h-[30rem] w-full flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm text-slate-900 outline-none focus:border-slate-400 disabled:bg-slate-50 disabled:text-slate-500"
               />
             </div>
           </div>
 
-          <aside className="space-y-5 lg:sticky lg:top-6">
-            <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+          <aside className="space-y-4 lg:sticky lg:top-6">
+            <div className="rounded-2xl bg-slate-50 p-4">
               <div className="mb-3">
                 <h3 className="text-sm font-semibold text-slate-900">
                   Available variables
@@ -348,7 +348,7 @@ export default function SettingsForm({ profile, email }: Props) {
                     onClick={() => insertVariable(variable.key)}
                     disabled={!isEditingTemplate || templatePending}
                     title={variable.description}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 font-mono text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-full bg-white px-3 py-1.5 font-mono text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <span>
                       {"{{"}
@@ -360,7 +360,7 @@ export default function SettingsForm({ profile, email }: Props) {
               </div>
             </div>
 
-            <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+            <div className="rounded-2xl bg-slate-50 p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-slate-900">
                   Rendered preview
@@ -369,7 +369,7 @@ export default function SettingsForm({ profile, email }: Props) {
                   Sample data
                 </span>
               </div>
-              <pre className="max-h-[38rem] min-h-[26rem] overflow-auto whitespace-pre-wrap rounded-lg bg-white p-4 text-sm leading-6 text-slate-700 ring-1 ring-slate-200">
+              <pre className="max-h-[30rem] min-h-[20rem] overflow-auto whitespace-pre-wrap rounded-2xl bg-white p-4 text-sm leading-6 text-slate-700 shadow-sm">
                 {preview}
               </pre>
             </div>

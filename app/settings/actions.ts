@@ -36,6 +36,11 @@ export type CreateWorkspaceFormState = {
   workspaceId?: string;
 };
 
+export type FeedbackFormState = {
+  error?: string;
+  message?: string;
+};
+
 function getOptionalString(formData: FormData, key: string) {
   const value = formData.get(key);
   if (typeof value !== "string") return null;
@@ -119,6 +124,35 @@ export async function createWorkspace(
     message: "Workspace created.",
     workspaceId: typeof data === "string" ? data : undefined,
   };
+}
+
+export async function submitFeedback(
+  _prevState: FeedbackFormState,
+  formData: FormData
+): Promise<FeedbackFormState> {
+  const { supabase, user } = await getAuthenticatedSupabaseClient();
+  const message = getOptionalString(formData, "message");
+  const rentalSearchId = getOptionalString(formData, "rentalSearchId");
+  const pagePath = getOptionalString(formData, "pagePath");
+
+  if (!message) {
+    return { error: "Add feedback before submitting." };
+  }
+
+  const { error } = await supabase.from("feedback").insert([
+    {
+      user_id: user.id,
+      rental_search_id: rentalSearchId,
+      page_path: pagePath,
+      message,
+    },
+  ]);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { message: "Thanks, feedback saved." };
 }
 
 export async function createInviteLink(

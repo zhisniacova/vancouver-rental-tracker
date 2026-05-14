@@ -53,7 +53,7 @@ export default function FrequentPlacesForm({ places }: Props) {
   }
 
   return (
-    <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+    <section className="rounded-[1.75rem] bg-white p-5 shadow-sm sm:p-6">
       <div className="mb-6">
         <p className="text-sm font-medium text-slate-500">
           {isLoadingWorkspaces
@@ -65,7 +65,7 @@ export default function FrequentPlacesForm({ places }: Props) {
         </h2>
         <p className="mt-1 text-sm text-slate-500">
           Add places you commute to often. Addresses are geocoded and used for
-          listing commute estimates.
+          rough listing commute estimates.
         </p>
       </div>
 

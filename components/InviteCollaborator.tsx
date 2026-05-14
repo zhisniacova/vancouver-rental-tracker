@@ -88,7 +88,7 @@ export default function InviteCollaborator() {
   }
 
   return (
-    <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+    <section className="rounded-[1.75rem] bg-white p-5 shadow-sm sm:p-6">
       <div className="mb-4">
         <p className="text-sm font-medium text-slate-500">
           {currentWorkspace?.name ?? "No workspace selected"}

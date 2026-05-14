@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect } from "react";
-import type { Session } from "@supabase/supabase-js";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
-async function syncSession(session: Session | null) {
-  if (!session) {
+async function syncSession(session: Session | null, event?: AuthChangeEvent) {
+  if (!session && event === "SIGNED_OUT") {
     await fetch("/auth/session", { method: "DELETE" });
     return;
   }
+
+  if (!session) return;
 
   await fetch("/auth/session", {
     method: "POST",
@@ -35,8 +37,8 @@ export default function AuthSessionBridge() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      syncSession(session);
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      syncSession(session, event);
     });
 
     return () => {

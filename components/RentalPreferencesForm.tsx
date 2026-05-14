@@ -2,9 +2,7 @@
 
 import { useActionState, useEffect } from "react";
 import {
-  createWorkspace,
   updateRentalPreferences,
-  type CreateWorkspaceFormState,
   type RentalPreferencesFormState,
 } from "@/app/settings/actions";
 import {
@@ -13,22 +11,13 @@ import {
 import { useWorkspace } from "./WorkspaceProvider";
 
 const initialState: RentalPreferencesFormState = {};
-const createInitialState: CreateWorkspaceFormState = {};
 
 export default function RentalPreferencesForm() {
-  const {
-    currentWorkspace,
-    isLoadingWorkspaces,
-    refreshWorkspaces,
-    setCurrentRentalSearchId,
-  } = useWorkspace();
+  const { currentWorkspace, isLoadingWorkspaces, refreshWorkspaces } =
+    useWorkspace();
   const [state, formAction, pending] = useActionState(
     updateRentalPreferences,
     initialState
-  );
-  const [createState, createAction, createPending] = useActionState(
-    createWorkspace,
-    createInitialState
   );
   const preferences = normalizeRentalPreferences(
     currentWorkspace?.criteriaPreferences
@@ -40,23 +29,8 @@ export default function RentalPreferencesForm() {
     }
   }, [refreshWorkspaces, state.message]);
 
-  useEffect(() => {
-    if (!createState.message) return;
-
-    void refreshWorkspaces().then(() => {
-      if (createState.workspaceId) {
-        setCurrentRentalSearchId(createState.workspaceId);
-      }
-    });
-  }, [
-    createState.message,
-    createState.workspaceId,
-    refreshWorkspaces,
-    setCurrentRentalSearchId,
-  ]);
-
   return (
-    <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+    <section className="rounded-[1.75rem] bg-white p-5 shadow-sm sm:p-6">
       <div className="mb-6">
         <p className="text-sm font-medium text-slate-500">
           {isLoadingWorkspaces
@@ -70,44 +44,6 @@ export default function RentalPreferencesForm() {
           Workspace name and numeric targets. Criteria live in the dedicated criteria section below.
         </p>
       </div>
-
-      <form
-        action={createAction}
-        className="mb-6 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200"
-      >
-        <p className="text-sm font-semibold text-slate-900">
-          Start a separate search
-        </p>
-        <p className="mt-1 text-sm text-slate-500">
-          Create your own workspace when you are looking separately from the
-          current collaborators.
-        </p>
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <input
-            name="workspaceName"
-            placeholder="My solo apartment search"
-            disabled={createPending}
-            className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60"
-          />
-          <button
-            type="submit"
-            disabled={createPending}
-            className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60"
-          >
-            {createPending ? "Creating..." : "Create workspace"}
-          </button>
-        </div>
-        {createState.error && (
-          <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
-            {createState.error}
-          </p>
-        )}
-        {createState.message && (
-          <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-            {createState.message}
-          </p>
-        )}
-      </form>
 
       <form key={currentWorkspace?.id ?? "no-workspace"} action={formAction}>
 

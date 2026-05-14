@@ -87,7 +87,13 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
   }, []);
 
   if (isLoadingCurrentUser) {
-    return null;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+        <div className="rounded-2xl bg-white px-5 py-4 text-sm font-medium text-slate-600 shadow-sm ring-1 ring-slate-200">
+          Loading Rental Search Tracker...
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -33,7 +33,7 @@ export default function JoinInviteForm({ token }: Props) {
     >
       <div className="mb-6">
         <p className="text-sm font-medium text-slate-500">
-          Vancouver Rental Tracker
+          Rental Search Tracker
         </p>
         <h1 className="text-3xl font-bold text-slate-900">Join workspace</h1>
       </div>
