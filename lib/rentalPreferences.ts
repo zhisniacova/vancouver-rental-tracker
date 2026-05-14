@@ -60,7 +60,7 @@ export const CRITERIA_LABELS: Record<CriteriaKey, string> = {
   parking: "Parking",
   storage: "Storage",
   gym: "Gym",
-  inSuiteLaundry: "Laundry",
+  inSuiteLaundry: "In-suite laundry",
   pets: "Pets",
   furnished: "Furnished",
 };
@@ -168,7 +168,7 @@ function evaluatePets(petPolicy?: string | null) {
   }
 
   const normalized = petPolicy.toLowerCase();
-  const missing = /\b(no pets|not allowed|pet[s]? not allowed)\b/.test(
+  const missing = normalized === "no" || /\b(no pets|not allowed|pet[s]? not allowed)\b/.test(
     normalized
   );
 
@@ -245,7 +245,8 @@ export function getCriteriaMatchSummary(
     totalPoints,
     percentage,
     missingMustHaves: signals.filter(
-      (signal) => signal.importance === "must-have" && !signal.matched
+      (signal) =>
+        signal.importance === "must-have" && signal.known && !signal.matched
     ),
   };
 }

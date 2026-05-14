@@ -1,15 +1,24 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import GeocodeListingButton from "./GeocodeListingButton";
 import { useCurrentUser } from "./CurrentUserProvider";
 import { formatStatusLabel } from "./StatusBadge";
 import { useNeighborhoodOptions } from "./useNeighborhoodOptions";
 import { useWorkspace } from "./WorkspaceProvider";
-import { type ListingImage } from "@/lib/collaboration";
+import {
+  getMemberDisplayName,
+  type ListingImage,
+  type WorkspaceMember,
+} from "@/lib/collaboration";
+import {
+  isImportanceLevel,
+  type MemberCriterionPreference,
+  type WorkspaceCriterion,
+} from "@/lib/customCriteria";
 
 type ListingStatus =
   | "to_process"
@@ -32,7 +41,7 @@ type AutofillListingResponse = Partial<{
   storageLocker: AmenityValue;
   inSuiteWasher: AmenityValue;
   gym: AmenityValue;
-  petPolicy: string;
+  petPolicy: AmenityValue;
   earliestMoveIn: string;
   sqft: string;
   rawDescription: string;
@@ -67,7 +76,7 @@ type ListingFormData = {
   storageLocker: AmenityValue;
   inSuiteWasher: AmenityValue;
   gym: AmenityValue;
-  petPolicy: string;
+  petPolicy: AmenityValue;
   earliestMoveIn: string;
   sqft: string;
   contactName: string;
@@ -125,6 +134,13 @@ type ExistingListing = {
   formatted_address?: string | null;
   geocoded_at?: string | null;
   images?: ListingImage[];
+  criteria_values?: ListingCriteriaValue[];
+};
+
+type ListingCriteriaValue = {
+  criterion_id: string;
+  value: AmenityValue;
+  notes?: string | null;
 };
 
 type Props = {
@@ -136,6 +152,44 @@ const fieldClassName =
 
 const sectionClassName =
   "rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6";
+
+type BuiltinCriterionFieldName =
+  | "parking"
+  | "storageLocker"
+  | "gym"
+  | "inSuiteWasher"
+  | "petPolicy";
+
+const BUILTIN_CRITERION_FIELDS: Record<
+  string,
+  { label: string; name: BuiltinCriterionFieldName }
+> = {
+  parking: { label: "Parking", name: "parking" },
+  storage: { label: "Storage", name: "storageLocker" },
+  gym: { label: "Gym", name: "gym" },
+  inSuiteLaundry: { label: "In-suite laundry", name: "inSuiteWasher" },
+  pets: { label: "Pets / pet policy", name: "petPolicy" },
+};
+
+function normalizeAmenityValue(value?: string | null): AmenityValue {
+  const normalized = value?.trim().toLowerCase();
+
+  if (!normalized || normalized === "unknown") return "Unknown";
+  if (
+    normalized === "yes" ||
+    /\b(pets allowed|pet friendly|cats allowed|dogs allowed)\b/.test(normalized)
+  ) {
+    return "Yes";
+  }
+  if (
+    normalized === "no" ||
+    /\b(no pets|pets not allowed|pet not allowed|not allowed)\b/.test(normalized)
+  ) {
+    return "No";
+  }
+
+  return "Unknown";
+}
 
 function FormSection({
   title,
@@ -177,7 +231,7 @@ function getInitialFormData(
       storageLocker: "Unknown",
       inSuiteWasher: "Unknown",
       gym: "Unknown",
-      petPolicy: "",
+      petPolicy: "Unknown",
       earliestMoveIn: "",
       sqft: "",
       contactName: "",
@@ -209,7 +263,7 @@ function getInitialFormData(
     storageLocker: existingListing.storage_locker || "Unknown",
     inSuiteWasher: existingListing.in_suite_washer || "Unknown",
     gym: existingListing.gym || "Unknown",
-    petPolicy: existingListing.pet_policy || "",
+    petPolicy: normalizeAmenityValue(existingListing.pet_policy),
     earliestMoveIn: existingListing.earliest_move_in || "",
     sqft: existingListing.sqft?.toString() || "",
     contactName: existingListing.contact_name || "",
@@ -238,6 +292,58 @@ function getInitialImages(existingListing?: ExistingListing): FormImage[] {
   return urls.map((url) => ({ kind: "url" as const, url }));
 }
 
+function getInitialCustomCriteriaValues(existingListing?: ExistingListing) {
+  return Object.fromEntries(
+    (existingListing?.criteria_values ?? []).map((value) => [
+      value.criterion_id,
+      value.value,
+    ])
+  ) as Record<string, AmenityValue>;
+}
+
+function getUniqueMemberOptions(
+  members: WorkspaceMember[],
+  currentUserName: string,
+  existingValues: Array<string | null | undefined>
+) {
+  const seen = new Set<string>();
+  const options: string[] = [];
+
+  function add(value?: string | null) {
+    const cleaned = value?.trim();
+    if (!cleaned || seen.has(cleaned)) return;
+    seen.add(cleaned);
+    options.push(cleaned);
+  }
+
+  add(currentUserName);
+  members.forEach((member) => add(getMemberDisplayName(member)));
+  existingValues.forEach(add);
+
+  return options;
+}
+
+function normalizeSearchText(value: string) {
+  return value.toLowerCase().replace(/[-_]/g, " ");
+}
+
+function criterionMatchesText(criterion: WorkspaceCriterion, text: string) {
+  const normalizedText = normalizeSearchText(text);
+  const keywords = [
+    criterion.label,
+    criterion.key,
+    ...(criterion.keywords ?? []),
+  ]
+    .map(normalizeSearchText)
+    .filter(Boolean);
+
+  return keywords.some((keyword) =>
+    new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(
+      normalizedText
+    )
+  );
+}
+
 export default function ListingForm({ existingListing }: Props) {
   const router = useRouter();
   const { currentUser } = useCurrentUser();
@@ -252,11 +358,60 @@ export default function ListingForm({ existingListing }: Props) {
   const [images, setImages] = useState<FormImage[]>(
     getInitialImages(existingListing)
   );
+  const [workspaceCriteria, setWorkspaceCriteria] = useState<WorkspaceCriterion[]>(
+    []
+  );
+  const [criterionPreferences, setCriterionPreferences] = useState<
+    MemberCriterionPreference[]
+  >([]);
+  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>(
+    []
+  );
+  const [customCriteriaValues, setCustomCriteriaValues] = useState<
+    Record<string, AmenityValue>
+  >(getInitialCustomCriteriaValues(existingListing));
   const [imageUrlInput, setImageUrlInput] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isAutofilling, setIsAutofilling] = useState(false);
   const [autofillCooldownUntil, setAutofillCooldownUntil] = useState(0);
   const [message, setMessage] = useState("");
+  const criteriaWorkspaceId =
+    existingListing?.rental_search_id ?? currentRentalSearchId ?? null;
+  const activeCriteria = useMemo(
+    () => workspaceCriteria.filter((criterion) => !criterion.archivedAt),
+    [workspaceCriteria]
+  );
+  const selectedCriteria = useMemo(
+    () =>
+      activeCriteria.filter((criterion) => {
+        const preference = criterionPreferences.find(
+          (item) =>
+            item.criterionId === criterion.id &&
+            item.userId === currentUser?.id
+        );
+
+        return Boolean(preference && preference.importance !== "not important");
+      }),
+    [activeCriteria, criterionPreferences, currentUser?.id]
+  );
+  const builtinCriteriaFields = useMemo(() => {
+    const fields = new Map<
+      BuiltinCriterionFieldName,
+      { label: string; name: BuiltinCriterionFieldName }
+    >();
+
+    for (const criterion of selectedCriteria) {
+      if (!criterion.builtinKey) continue;
+      const field = BUILTIN_CRITERION_FIELDS[criterion.builtinKey];
+      if (field) fields.set(field.name, field);
+    }
+
+    return [...fields.values()];
+  }, [selectedCriteria]);
+  const customCriteria = useMemo(
+    () => selectedCriteria.filter((criterion) => !criterion.builtinKey),
+    [selectedCriteria]
+  );
 
   useEffect(() => {
     if (!existingListing) {
@@ -267,11 +422,161 @@ export default function ListingForm({ existingListing }: Props) {
     }
   }, [currentUserName, existingListing]);
 
+  useEffect(() => {
+    if (!criteriaWorkspaceId) {
+      setWorkspaceCriteria([]);
+      setCriterionPreferences([]);
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadWorkspaceCriteria() {
+      const { data, error } = await supabase
+        .from("rental_search_criteria")
+        .select("id, rental_search_id, key, label, builtin_key, keywords, archived_at")
+        .eq("rental_search_id", criteriaWorkspaceId)
+        .order("created_at", { ascending: true });
+      const { data: preferenceData, error: preferenceError } = currentUser?.id
+        ? await supabase
+            .from("search_member_criteria_preferences")
+            .select("rental_search_id, user_id, criterion_id, importance")
+            .eq("rental_search_id", criteriaWorkspaceId)
+            .eq("user_id", currentUser.id)
+        : { data: [], error: null };
+
+      if (!isMounted) return;
+
+      if (error || preferenceError) {
+        console.error("Error loading workspace criteria:", error || preferenceError);
+        setWorkspaceCriteria([]);
+        setCriterionPreferences([]);
+        return;
+      }
+
+      setWorkspaceCriteria(
+        (data ?? []).map((criterion) => ({
+          id: criterion.id,
+          rentalSearchId: criterion.rental_search_id,
+          key: criterion.key,
+          label: criterion.label,
+          builtinKey: criterion.builtin_key,
+          keywords: criterion.keywords ?? [],
+          archivedAt: criterion.archived_at,
+        }))
+      );
+      setCriterionPreferences(
+        (preferenceData ?? []).map((preference) => ({
+          rentalSearchId: preference.rental_search_id,
+          userId: preference.user_id,
+          criterionId: preference.criterion_id,
+          importance: isImportanceLevel(preference.importance)
+            ? preference.importance
+            : "not important",
+        }))
+      );
+    }
+
+    void loadWorkspaceCriteria();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [criteriaWorkspaceId, currentUser?.id]);
+
+  useEffect(() => {
+    if (!criteriaWorkspaceId) {
+      setWorkspaceMembers([]);
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadWorkspaceMembers() {
+      const { data: memberData, error } = await supabase
+        .from("search_members")
+        .select("rental_search_id, user_id, role")
+        .eq("rental_search_id", criteriaWorkspaceId)
+        .order("created_at", { ascending: true });
+
+      if (!isMounted) return;
+
+      if (error) {
+        console.error("Error loading workspace members:", error);
+        setWorkspaceMembers([]);
+        return;
+      }
+
+      const userIds = (memberData ?? []).map((member) => member.user_id);
+      const { data: profileData } = userIds.length
+        ? await supabase
+            .from("profiles")
+            .select("id, nickname, full_name, contact_email, phone_number")
+            .in("id", userIds)
+        : { data: [] };
+
+      if (!isMounted) return;
+
+      const profilesById = new Map(
+        (profileData ?? []).map((profile) => [profile.id, profile])
+      );
+
+      setWorkspaceMembers(
+        (memberData ?? []).map((member) => {
+          const profile = profilesById.get(member.user_id);
+          return {
+            rentalSearchId: member.rental_search_id,
+            userId: member.user_id,
+            role: member.role as "owner" | "member",
+            nickname: profile?.nickname ?? null,
+            fullName: profile?.full_name ?? null,
+            email: profile?.contact_email ?? null,
+            phoneNumber: profile?.phone_number ?? null,
+          };
+        })
+      );
+    }
+
+    void loadWorkspaceMembers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [criteriaWorkspaceId]);
+
+  useEffect(() => {
+    setCustomCriteriaValues((current) => {
+      const next = { ...current };
+      for (const criterion of customCriteria) {
+        if (!next[criterion.id]) {
+          next[criterion.id] =
+            existingListing?.criteria_values?.find(
+              (value) => value.criterion_id === criterion.id
+            )?.value ?? "Unknown";
+        }
+      }
+      return next;
+    });
+  }, [customCriteria, existingListing?.criteria_values]);
+
   const previewUrl = useMemo(() => {
     const firstImage = images[0];
     if (!firstImage) return "";
     return firstImage.kind === "url" ? firstImage.url : firstImage.preview;
   }, [images]);
+  const memberNameOptions = useMemo(
+    () =>
+      getUniqueMemberOptions(workspaceMembers, currentUserName, [
+        existingListing?.added_by,
+        existingListing?.messaged_by,
+      ]),
+    [
+      currentUserName,
+      existingListing?.added_by,
+      existingListing?.messaged_by,
+      workspaceMembers,
+    ]
+  );
 
   function handleChange(
     event: React.ChangeEvent<
@@ -289,6 +594,13 @@ export default function ListingForm({ existingListing }: Props) {
         current.status === "messaged")
         ? { status: "viewing_scheduled" as ListingStatus }
         : {}),
+    }));
+  }
+
+  function handleCustomCriteriaChange(criterionId: string, value: AmenityValue) {
+    setCustomCriteriaValues((current) => ({
+      ...current,
+      [criterionId]: value,
     }));
   }
 
@@ -353,9 +665,33 @@ export default function ListingForm({ existingListing }: Props) {
         contactPhone: data.contactPhone?.trim() || current.contactPhone,
         contactMedium: data.contactMedium?.trim() || current.contactMedium,
         contactDetails: data.contactDetails?.trim() || current.contactDetails,
-        petPolicy: data.petPolicy?.trim() || current.petPolicy,
+        petPolicy: normalizeAmenityValue(data.petPolicy) || current.petPolicy,
       };
     });
+
+    const autofillText = [
+      data.title,
+      data.location,
+      data.neighborhood,
+      data.rawDescription,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    if (autofillText) {
+      setCustomCriteriaValues((current) => {
+        const next = { ...current };
+        for (const criterion of customCriteria) {
+          if (
+            (next[criterion.id] ?? "Unknown") === "Unknown" &&
+            criterionMatchesText(criterion, autofillText)
+          ) {
+            next[criterion.id] = "Yes";
+          }
+        }
+        return next;
+      });
+    }
 
     const autofillImages = data.imageUrls?.length
       ? data.imageUrls
@@ -415,22 +751,39 @@ export default function ListingForm({ existingListing }: Props) {
       }
 
       mergeAutofillData(data as AutofillListingResponse);
-      if (
-        existingListing &&
-        (data as AutofillListingResponse).location?.trim()
-      ) {
-        const location = (data as AutofillListingResponse).location?.trim();
-        void supabase
-          .from("listings")
-          .update({ location })
-          .eq("id", existingListing.id)
-          .then(() =>
-            fetch("/api/geocode-listing", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ listingId: existingListing.id }),
+      if (existingListing) {
+        const autofillData = data as AutofillListingResponse;
+        const location = autofillData.location?.trim();
+        const neighborhood = autofillData.neighborhood?.trim();
+
+        if (location) {
+          await supabase
+            .from("listings")
+            .update({
+              location,
+              ...(neighborhood ? { neighborhood } : {}),
             })
-          );
+            .eq("id", existingListing.id);
+
+          const geocodeResponse = await fetch("/api/geocode-listing", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              listingId: existingListing.id,
+              address: location,
+            }),
+          });
+          const geocodeData = (await geocodeResponse.json().catch(() => null)) as
+            | { neighborhood?: string | null }
+            | null;
+
+          if (geocodeData?.neighborhood) {
+            setFormData((current) => ({
+              ...current,
+              neighborhood: geocodeData.neighborhood || current.neighborhood,
+            }));
+          }
+        }
       }
       setAutofillCooldownUntil(Date.now() + 10_000);
 
@@ -585,11 +938,35 @@ export default function ListingForm({ existingListing }: Props) {
           if (imageError) throw imageError;
         }
 
+        if (customCriteria.length > 0) {
+          const { error: deleteCriteriaError } = await supabase
+            .from("listing_criteria_values")
+            .delete()
+            .eq("listing_id", savedListingId);
+
+          if (deleteCriteriaError) throw deleteCriteriaError;
+
+          const { error: criteriaError } = await supabase
+            .from("listing_criteria_values")
+            .insert(
+              customCriteria.map((criterion) => ({
+                listing_id: savedListingId,
+                criterion_id: criterion.id,
+                value: customCriteriaValues[criterion.id] ?? "Unknown",
+              }))
+            );
+
+          if (criteriaError) throw criteriaError;
+        }
+
         if (formData.location.trim()) {
           await fetch("/api/geocode-listing", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ listingId: savedListingId }),
+            body: JSON.stringify({
+              listingId: savedListingId,
+              address: formData.location.trim(),
+            }),
           });
         }
       }
@@ -690,8 +1067,11 @@ export default function ListingForm({ existingListing }: Props) {
                 onChange={handleChange}
                 className={fieldClassName}
               >
-                <option>Sasha</option>
-                <option>Gleb</option>
+                {memberNameOptions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -707,30 +1087,17 @@ export default function ListingForm({ existingListing }: Props) {
                 placeholder="Address or location text"
                 className={fieldClassName}
               />
-              {existingListing && (
-                <div className="mt-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-100">
-                  {existingListing.formatted_address && (
-                    <p className="mb-2 text-xs text-slate-500">
-                      Saved map address:{" "}
-                      <span className="font-medium text-slate-700">
-                        {existingListing.formatted_address}
-                      </span>
-                    </p>
-                  )}
-                  <GeocodeListingButton
-                    listingId={existingListing.id}
-                    address={formData.location}
-                    label={
-                      existingListing.latitude !== null &&
-                      existingListing.latitude !== undefined &&
-                      existingListing.longitude !== null &&
-                      existingListing.longitude !== undefined
-                        ? "Refresh map"
-                        : "Find on map"
-                    }
-                  />
-                </div>
+              {existingListing?.formatted_address && (
+                <p className="mt-2 text-xs text-slate-500">
+                  Saved map address:{" "}
+                  <span className="font-medium text-slate-700">
+                    {existingListing.formatted_address}
+                  </span>
+                </p>
               )}
+              <p className="mt-2 text-xs text-slate-500">
+                Map location updates automatically after autofill or save.
+              </p>
             </div>
 
             <div>
@@ -875,8 +1242,11 @@ export default function ListingForm({ existingListing }: Props) {
                 className={fieldClassName}
               >
                 <option>None</option>
-                <option>Sasha</option>
-                <option>Gleb</option>
+                {memberNameOptions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -885,86 +1255,69 @@ export default function ListingForm({ existingListing }: Props) {
 
       <FormSection
         title="Amenities / Important Criteria"
-        description="Track practical yes/no details and pet rules."
+        description="Only the criteria selected for this workspace appear here."
       >
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              Parking
-            </label>
-            <select
-              name="parking"
-              value={formData.parking}
-              onChange={handleChange}
-              className={fieldClassName}
-            >
-              <option>Unknown</option>
-              <option>Yes</option>
-              <option>No</option>
-            </select>
-          </div>
+          {builtinCriteriaFields.map((field) => (
+            <div key={field.name}>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                {field.label}
+              </label>
+              <select
+                name={field.name}
+                value={formData[field.name]}
+                onChange={handleChange}
+                className={fieldClassName}
+              >
+                <option>Unknown</option>
+                <option>Yes</option>
+                <option>No</option>
+              </select>
+            </div>
+          ))}
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              Storage
-            </label>
-            <select
-              name="storageLocker"
-              value={formData.storageLocker}
-              onChange={handleChange}
-              className={fieldClassName}
-            >
-              <option>Unknown</option>
-              <option>Yes</option>
-              <option>No</option>
-            </select>
-          </div>
+          {customCriteria.length > 0 && (
+            <div className="md:col-span-2 lg:col-span-4">
+              <div className="mb-3">
+                <p className="text-sm font-semibold text-slate-900">
+                  Custom criteria
+                </p>
+                <p className="text-xs text-slate-500">
+                  These come from Settings for the current workspace.
+                </p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {customCriteria.map((criterion) => (
+                  <label key={criterion.id} className="block">
+                    <span className="mb-2 block text-sm font-medium text-slate-700">
+                      {criterion.label}
+                    </span>
+                    <select
+                      value={customCriteriaValues[criterion.id] ?? "Unknown"}
+                      onChange={(event) =>
+                        handleCustomCriteriaChange(
+                          criterion.id,
+                          event.target.value as AmenityValue
+                        )
+                      }
+                      className={fieldClassName}
+                    >
+                      <option>Unknown</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              Gym
-            </label>
-            <select
-              name="gym"
-              value={formData.gym}
-              onChange={handleChange}
-              className={fieldClassName}
-            >
-              <option>Unknown</option>
-              <option>Yes</option>
-              <option>No</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              In-suite laundry
-            </label>
-            <select
-              name="inSuiteWasher"
-              value={formData.inSuiteWasher}
-              onChange={handleChange}
-              className={fieldClassName}
-            >
-              <option>Unknown</option>
-              <option>Yes</option>
-              <option>No</option>
-            </select>
-          </div>
-
-          <div className="md:col-span-2 lg:col-span-4">
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              Pets / pet policy
-            </label>
-            <textarea
-              name="petPolicy"
-              rows={3}
-              value={formData.petPolicy}
-              onChange={handleChange}
-              placeholder="Cats allowed, no pets, deposit required, unknown..."
-              className={fieldClassName}
-            />
-          </div>
+          {builtinCriteriaFields.length === 0 && customCriteria.length === 0 && (
+            <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500 md:col-span-2 lg:col-span-4">
+              No criteria selected for this workspace. Add criteria in Settings
+              to track them on listings.
+            </p>
+          )}
         </div>
       </FormSection>
 

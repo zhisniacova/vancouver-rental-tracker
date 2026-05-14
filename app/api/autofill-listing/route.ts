@@ -1,3 +1,5 @@
+import { geocodeAddress, reverseGeocodeCoordinates } from "@/lib/geocoding";
+
 type AmenityValue = "Unknown" | "Yes" | "No";
 type ListingStatus =
   | "to_process"
@@ -23,7 +25,7 @@ type AutofillListingData = {
   storageLocker: AmenityValue;
   inSuiteWasher: AmenityValue;
   gym: AmenityValue;
-  petPolicy: string;
+  petPolicy: AmenityValue;
   earliestMoveIn: string;
   sqft: string;
   rawDescription: string;
@@ -38,10 +40,16 @@ type AutofillListingData = {
   contactDetails: string;
   aiEnhanced: boolean;
   warnings: string[];
+  mapCoordinates?: MapCoordinates;
 };
 
 type ListingContext = {
   postedAt: string;
+};
+
+type MapCoordinates = {
+  latitude: number;
+  longitude: number;
 };
 
 const YES_NO_UNKNOWN = ["Unknown", "Yes", "No"] as const;
@@ -96,7 +104,7 @@ function emptyListingData(): AutofillListingData {
     storageLocker: "Unknown",
     inSuiteWasher: "Unknown",
     gym: "Unknown",
-    petPolicy: "",
+    petPolicy: "Unknown",
     earliestMoveIn: "",
     sqft: "",
     rawDescription: "",
@@ -269,6 +277,64 @@ function extractStreetAddress(html: string) {
   ]);
 }
 
+function parseCoordinates(value: string): MapCoordinates | null {
+  const decodedValue = decodeURIComponent(decodeHtml(value));
+  const match = decodedValue.match(
+    /(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)/
+  );
+
+  if (!match) return null;
+
+  const latitude = Number(match[1]);
+  const longitude = Number(match[2]);
+
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    return null;
+  }
+
+  return { latitude, longitude };
+}
+
+function extractCraigslistMapCoordinates(html: string): MapCoordinates | null {
+  const mapAttributeMatch = html.match(
+    /data-latitude=["'](-?\d{1,2}(?:\.\d+)?)["'][\s\S]*?data-longitude=["'](-?\d{1,3}(?:\.\d+)?)["']/i
+  );
+
+  if (mapAttributeMatch) {
+    const coordinates = parseCoordinates(
+      `${mapAttributeMatch[1]},${mapAttributeMatch[2]}`
+    );
+    if (coordinates) return coordinates;
+  }
+
+  const googleMapsLinks = html.matchAll(
+    /https?:\/\/(?:www\.)?google\.com\/maps\/(?:search|place)\/([^"'<> \n\r\t]+)/gi
+  );
+
+  for (const match of googleMapsLinks) {
+    const coordinates = parseCoordinates(match[1]);
+    if (coordinates) return coordinates;
+  }
+
+  const mapAddressBlocks = html.matchAll(
+    /<[^>]+class=["'][^"']*\bmapaddress\b[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/gi
+  );
+
+  for (const match of mapAddressBlocks) {
+    const coordinates = parseCoordinates(match[1]);
+    if (coordinates) return coordinates;
+  }
+
+  return null;
+}
+
 function extractPrice(value: string) {
   const match = value.match(/\$?\s*([0-9][0-9,]*)/);
   return match ? match[1].replace(/,/g, "") : "";
@@ -286,6 +352,44 @@ function extractPhone(value: string) {
   );
 }
 
+function extractPhoneFromHtml(html: string, pageText: string) {
+  for (const match of html.matchAll(/href=["']tel:([^"']+)["']/gi)) {
+    const phone = extractPhone(decodeHtml(match[1]));
+    if (phone) return phone;
+  }
+
+  const replyPhone = getFirstMatch(html, [
+    /<[^>]+class=["'][^"']*\breply-tel-number\b[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i,
+    /<[^>]+class=["'][^"']*\bphone\b[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i,
+  ]);
+
+  return extractPhone(replyPhone) || extractPhone(pageText);
+}
+
+function cleanContactDetails(
+  value: string,
+  contactPhone: string,
+  contactEmail: string
+) {
+  const cleaned = value
+    .replace(/\bshow contact info\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) return "";
+
+  const looksLikeCraigslistButtonInstruction =
+    /\btext\b/i.test(cleaned) &&
+    /\bfull name\b/i.test(cleaned) &&
+    /\baddress of interested property\b/i.test(cleaned);
+
+  if (looksLikeCraigslistButtonInstruction && (contactPhone || contactEmail)) {
+    return "";
+  }
+
+  return cleaned;
+}
+
 function extractSqft(value: string) {
   const match = value.match(
     /([0-9][0-9,]*)\s*(?:ft(?:\s*2|\s*²)?|sq\s*\.?\s*ft|sqft)\b/i
@@ -296,9 +400,94 @@ function extractSqft(value: string) {
 function extractAddress(value: string) {
   return (
     value.match(
-      /\b\d{2,6}\s+[A-Za-z][A-Za-z\s.'-]{2,40}\s+(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Blvd|Boulevard|Way|Lane|Ln|Crescent|Cres)\b/i
+      /\b\d{2,6}\s+[A-Za-z][A-Za-z\s.'-]{2,50}\s+(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Blvd|Boulevard|Way|Lane|Ln|Crescent|Cres|Court|Ct|Place|Pl|Mews|Walk|W|E|N|S)\b/i
     )?.[0] || ""
   );
+}
+
+function looksLikeStreetAddress(value: string) {
+  return Boolean(extractAddress(value) || /\b\d{2,6}\s+\S+/.test(value));
+}
+
+function cleanLocationCandidate(value: string) {
+  const cleaned = value.trim();
+  if (/^(?:google\s+map|map)$/i.test(cleaned)) return "";
+  return cleaned;
+}
+
+function needsMapCoordinateFallback(location: string) {
+  const cleaned = cleanLocationCandidate(location);
+  return !cleaned || !looksLikeStreetAddress(cleaned);
+}
+
+function chooseBestLocation({
+  scrapedLocation,
+  aiLocation,
+  rawDescription,
+}: {
+  scrapedLocation: string;
+  aiLocation: string;
+  rawDescription: string;
+}) {
+  const descriptionAddress = extractAddress(rawDescription);
+  const cleanedScraped = cleanLocationCandidate(scrapedLocation);
+  const cleanedAi = cleanLocationCandidate(aiLocation);
+
+  if (looksLikeStreetAddress(cleanedAi)) return cleanedAi;
+  if (looksLikeStreetAddress(descriptionAddress)) return descriptionAddress;
+  if (looksLikeStreetAddress(cleanedScraped)) return cleanedScraped;
+
+  return cleanedAi || cleanedScraped || descriptionAddress;
+}
+
+async function resolveLocationWithMapFallback(
+  scrapedData: AutofillListingData,
+  selectedLocation: string
+) {
+  if (
+    !scrapedData.mapCoordinates ||
+    !needsMapCoordinateFallback(selectedLocation)
+  ) {
+    return {
+      location: selectedLocation,
+      neighborhood: "",
+      warnings: [] as string[],
+    };
+  }
+
+  try {
+    const geocoded = await reverseGeocodeCoordinates(
+      scrapedData.mapCoordinates.latitude,
+      scrapedData.mapCoordinates.longitude
+    );
+
+    return {
+      location: geocoded.formattedAddress,
+      neighborhood: geocoded.neighborhood || "",
+      warnings: [] as string[],
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+
+    return {
+      location: selectedLocation,
+      neighborhood: "",
+      warnings: [
+        `Could not convert Craigslist map coordinates to an address: ${message}`,
+      ],
+    };
+  }
+}
+
+async function getNeighborhoodFromAddress(address: string) {
+  if (!looksLikeStreetAddress(address)) return "";
+
+  try {
+    const geocoded = await geocodeAddress(address);
+    return geocoded.neighborhood || "";
+  } catch {
+    return "";
+  }
 }
 
 function extractDate(value: string) {
@@ -619,11 +808,11 @@ function inferFromDescription(rawDescription: string, postedAt: string) {
         ? "Yes"
         : "Unknown";
 
-  const petPolicy =
+  const petPolicy: AmenityValue =
     /\b(no pets|pet[s]? not allowed)\b/i.test(rawDescription)
-      ? "No pets"
+      ? "No"
       : /\b(pet friendly|pets allowed|cats allowed|dogs allowed)\b/i.test(rawDescription)
-        ? rawDescription.match(/[^.\n]*(?:pet friendly|pets allowed|cats allowed|dogs allowed)[^.\n]*/i)?.[0]?.trim() || "Pets allowed"
+        ? "Yes"
         : "Unknown";
 
   const contactNameMatch = rawDescription.match(
@@ -673,6 +862,11 @@ function inferFromDescription(rawDescription: string, postedAt: string) {
     }
   }
 
+  const contactPhone = /\[hidden information\]/i.test(rawDescription)
+    ? ""
+    : extractPhone(rawDescription);
+  const contactEmail = extractEmail(rawDescription);
+
   return {
     gym,
     parking,
@@ -681,12 +875,14 @@ function inferFromDescription(rawDescription: string, postedAt: string) {
     furnished,
     petPolicy,
     contactName: contactNameMatch?.[1] || "",
-    contactEmail: extractEmail(rawDescription),
-    contactPhone: /\[hidden information\]/i.test(rawDescription)
-      ? ""
-      : extractPhone(rawDescription),
+    contactEmail,
+    contactPhone,
     contactMedium,
-    contactDetails: contactDetailsMatch?.[0]?.trim() || "",
+    contactDetails: cleanContactDetails(
+      contactDetailsMatch?.[0]?.trim() || "",
+      contactPhone,
+      contactEmail
+    ),
     viewingDate,
     status,
   };
@@ -760,11 +956,30 @@ async function enrichWithAi(
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey || !scrapedData.rawDescription) {
+    const selectedLocation = chooseBestLocation({
+      scrapedLocation: scrapedData.location,
+      aiLocation: "",
+      rawDescription: scrapedData.rawDescription,
+    });
+    const mapFallback = await resolveLocationWithMapFallback(
+      scrapedData,
+      selectedLocation
+    );
+    const addressNeighborhood =
+      mapFallback.neighborhood ||
+      (await getNeighborhoodFromAddress(mapFallback.location));
+
     return {
       ...scrapedData,
+      location: mapFallback.location,
+      neighborhood:
+        addressNeighborhood ||
+        guessNeighborhood(`${mapFallback.location} ${scrapedData.rawDescription}`) ||
+        scrapedData.neighborhood,
       status: statusForViewingDate(scrapedData.status, scrapedData.viewingDate),
       warnings: [
         ...scrapedData.warnings,
+        ...mapFallback.warnings,
         apiKey
           ? "No description was found for AI extraction."
           : "AI extraction skipped because OPENAI_API_KEY is not configured.",
@@ -786,7 +1001,7 @@ async function enrichWithAi(
       storageLocker: { enum: YES_NO_UNKNOWN },
       inSuiteWasher: { enum: YES_NO_UNKNOWN },
       gym: { enum: YES_NO_UNKNOWN },
-      petPolicy: { type: "string" },
+      petPolicy: { enum: YES_NO_UNKNOWN },
       earliestMoveIn: {
         type: "string",
         description: "ISO date in YYYY-MM-DD format, or an empty string.",
@@ -841,7 +1056,7 @@ async function enrichWithAi(
           {
             role: "system",
             content:
-              "Extract rental listing facts from the provided description. Prefer explicit statements only. Return Unknown when the description does not clearly say Yes or No. Do not infer amenities from neighborhood or vibes. inSuiteWasher means in-suite/in-unit/ensuite laundry only; shared laundry, laundry room, coin laundry, or laundry on the floor must be No, not Yes. earliestMoveIn must be YYYY-MM-DD or empty. viewingDate must be YYYY-MM-DDTHH:mm or empty. If viewing date text omits year, infer year from posted date context. If the text says a showing/viewing time is scheduled, set status to viewing_scheduled; otherwise use new. For Facebook Marketplace hidden contact info, use contactMedium Website and summarize it in contactDetails.",
+              "Extract rental listing facts from the provided description. Prefer explicit statements only. Return Unknown when the description does not clearly say Yes or No. For petPolicy, return only Yes, No, or Unknown. For location, return the best full street address if one appears anywhere in the title, website location, or description. Replace vague areas like Downtown or Vancouver with the street address when the description contains one. For neighborhood, infer from the street address when possible; otherwise use the most specific stated neighborhood. Do not infer amenities from neighborhood or vibes. inSuiteWasher means in-suite/in-unit/ensuite laundry only; shared laundry, laundry room, coin laundry, or laundry on the floor must be No, not Yes. earliestMoveIn must be YYYY-MM-DD or empty. viewingDate must be YYYY-MM-DDTHH:mm or empty. If viewing date text omits year, infer year from posted date context. If the text says a showing/viewing time is scheduled, set status to viewing_scheduled; otherwise use new. Ignore webpage button text like show contact info; do not copy it or instructions containing it into contactDetails. If a real phone number appears, put it in contactPhone. For Facebook Marketplace hidden contact info, use contactMedium Website and summarize it in contactDetails.",
           },
           {
             role: "user",
@@ -866,10 +1081,29 @@ async function enrichWithAi(
 
     if (!response.ok) {
       const errorText = await response.text();
+      const selectedLocation = chooseBestLocation({
+        scrapedLocation: scrapedData.location,
+        aiLocation: "",
+        rawDescription: scrapedData.rawDescription,
+      });
+      const mapFallback = await resolveLocationWithMapFallback(
+        scrapedData,
+        selectedLocation
+      );
+      const addressNeighborhood =
+        mapFallback.neighborhood ||
+        (await getNeighborhoodFromAddress(mapFallback.location));
+
       return {
         ...scrapedData,
+        location: mapFallback.location,
+        neighborhood:
+          addressNeighborhood ||
+          guessNeighborhood(`${mapFallback.location} ${scrapedData.rawDescription}`) ||
+          scrapedData.neighborhood,
         warnings: [
           ...scrapedData.warnings,
+          ...mapFallback.warnings,
           `AI extraction failed: ${response.status} ${errorText.slice(0, 120)}`,
         ],
       };
@@ -883,25 +1117,44 @@ async function enrichWithAi(
     const aiStorageLocker = normalizeAmenity(aiData.storageLocker);
     const aiInSuiteWasher = normalizeAmenity(aiData.inSuiteWasher);
     const aiGym = normalizeAmenity(aiData.gym);
+    const aiPetPolicy = normalizeAmenity(aiData.petPolicy);
     const aiStatus = normalizeListingStatus(aiData.status);
     const aiViewingDate = normalizeDateTimeLocal(aiData.viewingDate || "");
     const aiContactName = (aiData.contactName || "").trim();
     const aiContactEmail = (aiData.contactEmail || "").trim();
     const aiContactPhone = (aiData.contactPhone || "").trim();
     const aiContactMedium = normalizeContactMedium(aiData.contactMedium);
-    const aiContactDetails = (aiData.contactDetails || "").trim();
+    const aiContactDetails = cleanContactDetails(
+      (aiData.contactDetails || "").trim(),
+      aiContactPhone || scrapedData.contactPhone,
+      aiContactEmail || scrapedData.contactEmail
+    );
     const viewingDate = aiViewingDate || scrapedData.viewingDate;
     const status = statusForViewingDate(aiStatus || scrapedData.status, viewingDate);
+    const selectedLocation = chooseBestLocation({
+      scrapedLocation: scrapedData.location,
+      aiLocation: aiData.location || "",
+      rawDescription: scrapedData.rawDescription,
+    });
+    const mapFallback = await resolveLocationWithMapFallback(
+      scrapedData,
+      selectedLocation
+    );
+    const addressNeighborhood =
+      mapFallback.neighborhood ||
+      (await getNeighborhoodFromAddress(mapFallback.location));
+    const selectedNeighborhood =
+      addressNeighborhood ||
+      aiData.neighborhood?.trim() ||
+      guessNeighborhood(`${mapFallback.location} ${scrapedData.rawDescription}`) ||
+      scrapedData.neighborhood;
 
     return {
       ...scrapedData,
       title: scrapedData.title || aiData.title?.trim() || "",
       price: scrapedData.price || extractPrice(aiData.price || ""),
-      location: scrapedData.location || aiData.location?.trim() || "",
-      neighborhood:
-        aiData.neighborhood?.trim() ||
-        scrapedData.neighborhood ||
-        guessNeighborhood(`${scrapedData.title} ${scrapedData.location}`),
+      location: mapFallback.location,
+      neighborhood: selectedNeighborhood,
       type: scrapedData.type || normalizeListingType(aiData.type),
       furnished:
         scrapedData.furnished !== "Unknown"
@@ -918,7 +1171,10 @@ async function enrichWithAi(
           ? scrapedData.inSuiteWasher
           : aiInSuiteWasher,
       gym: scrapedData.gym !== "Unknown" ? scrapedData.gym : aiGym,
-      petPolicy: scrapedData.petPolicy || aiData.petPolicy?.trim() || "",
+      petPolicy:
+        scrapedData.petPolicy !== "Unknown"
+          ? scrapedData.petPolicy
+          : aiPetPolicy,
       earliestMoveIn:
         extractDate(aiData.earliestMoveIn || "") || scrapedData.earliestMoveIn,
       sqft: extractSqft(aiData.sqft || "") || scrapedData.sqft,
@@ -931,13 +1187,35 @@ async function enrichWithAi(
         aiContactMedium !== "Unknown" ? aiContactMedium : scrapedData.contactMedium,
       contactDetails: aiContactDetails || scrapedData.contactDetails,
       aiEnhanced: true,
+      warnings: [...scrapedData.warnings, ...mapFallback.warnings],
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    const selectedLocation = chooseBestLocation({
+      scrapedLocation: scrapedData.location,
+      aiLocation: "",
+      rawDescription: scrapedData.rawDescription,
+    });
+    const mapFallback = await resolveLocationWithMapFallback(
+      scrapedData,
+      selectedLocation
+    );
+    const addressNeighborhood =
+      mapFallback.neighborhood ||
+      (await getNeighborhoodFromAddress(mapFallback.location));
 
     return {
       ...scrapedData,
-      warnings: [...scrapedData.warnings, `AI extraction failed: ${message}`],
+      location: mapFallback.location,
+      neighborhood:
+        addressNeighborhood ||
+        guessNeighborhood(`${mapFallback.location} ${scrapedData.rawDescription}`) ||
+        scrapedData.neighborhood,
+      warnings: [
+        ...scrapedData.warnings,
+        ...mapFallback.warnings,
+        `AI extraction failed: ${message}`,
+      ],
     };
   }
 }
@@ -949,6 +1227,7 @@ function scrapeListing(html: string): AutofillListingData {
   const attrText = extractAttrGroupText(html);
   const isFacebookMarketplace =
     /facebook\.com\/marketplace|Facebook Marketplace|marketplace\/item/i.test(html);
+  data.mapCoordinates = extractCraigslistMapCoordinates(html) ?? undefined;
 
   data.title =
     getFirstMatch(html, [
@@ -990,6 +1269,12 @@ function scrapeListing(html: string): AutofillListingData {
 
   if (!data.location) {
     data.location = extractAddress(data.rawDescription);
+  } else {
+    data.location = chooseBestLocation({
+      scrapedLocation: data.location,
+      aiLocation: "",
+      rawDescription: data.rawDescription,
+    });
   }
 
   data.imageUrls = extractListingImages(html);
@@ -1007,9 +1292,7 @@ function scrapeListing(html: string): AutofillListingData {
   data.storageLocker = inferredAmenities.storageLocker;
   data.inSuiteWasher = inferredAmenities.inSuiteWasher;
   data.gym = inferredAmenities.gym;
-  data.neighborhood = guessNeighborhood(
-    `${data.title} ${data.location} ${data.rawDescription}`
-  );
+  data.neighborhood = guessNeighborhood(`${data.location} ${data.rawDescription}`);
   const descriptionSignals = inferFromDescription(data.rawDescription, extractPostedAt(html));
   data.gym = data.gym !== "Unknown" ? data.gym : descriptionSignals.gym;
   data.storageLocker =
@@ -1027,9 +1310,14 @@ function scrapeListing(html: string): AutofillListingData {
   data.petPolicy = descriptionSignals.petPolicy;
   data.contactName = descriptionSignals.contactName;
   data.contactEmail = descriptionSignals.contactEmail;
-  data.contactPhone = descriptionSignals.contactPhone;
+  data.contactPhone =
+    descriptionSignals.contactPhone || extractPhoneFromHtml(html, combinedText);
   data.contactMedium = descriptionSignals.contactMedium;
-  data.contactDetails = descriptionSignals.contactDetails;
+  data.contactDetails = cleanContactDetails(
+    descriptionSignals.contactDetails,
+    data.contactPhone,
+    data.contactEmail
+  );
   data.viewingDate = descriptionSignals.viewingDate;
   data.status = statusForViewingDate(descriptionSignals.status, data.viewingDate);
 

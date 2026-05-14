@@ -57,6 +57,7 @@ export async function POST(request: Request) {
         latitude: result.latitude,
         longitude: result.longitude,
         formatted_address: result.formattedAddress,
+        ...(result.neighborhood ? { neighborhood: result.neighborhood } : {}),
         geocoded_at: geocodedAt,
       })
       .eq("id", listingId);
@@ -70,6 +71,7 @@ export async function POST(request: Request) {
       latitude: result.latitude,
       longitude: result.longitude,
       formattedAddress: result.formattedAddress,
+      neighborhood: result.neighborhood,
       geocodedAt,
       provider: result.provider,
     });

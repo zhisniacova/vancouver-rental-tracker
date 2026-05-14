@@ -95,7 +95,7 @@ function evaluateBuiltIn(
       return { matched: false, known: false, summary: "Unknown" };
     }
     const normalized = normalizeText(value);
-    const missing = /\b(no pets|not allowed|pets not allowed|pet not allowed)\b/.test(
+    const missing = normalized === "no" || /\b(no pets|not allowed|pets not allowed|pet not allowed)\b/.test(
       normalized
     );
     return { matched: !missing, known: true, summary: value };
@@ -147,8 +147,18 @@ function evaluateBuiltIn(
 
 function evaluateCustomCriterion(
   criterion: WorkspaceCriterion,
-  searchableText: string
+  searchableText: string,
+  customCriteriaValues: Record<string, string | null | undefined> = {}
 ) {
+  const explicitValue = customCriteriaValues[criterion.id];
+  if (explicitValue) {
+    return {
+      matched: isYes(explicitValue),
+      known: isKnown(explicitValue),
+      summary: explicitValue,
+    };
+  }
+
   const text = normalizeText(searchableText);
   const keywords = [
     criterion.label,
@@ -190,11 +200,13 @@ export function getCustomCriteriaMatchSummary({
   preferences,
   listing,
   searchableText,
+  customCriteriaValues,
 }: {
   criteria: WorkspaceCriterion[];
   preferences: MemberCriterionPreference[];
   listing: ListingCriteriaInput;
   searchableText: string;
+  customCriteriaValues?: Record<string, string | null | undefined>;
 }): CustomCriteriaMatchSummary {
   const signals = criteria
     .filter((criterion) => !criterion.archivedAt)
@@ -203,7 +215,11 @@ export function getCustomCriteriaMatchSummary({
       const points = IMPORTANCE_POINTS[importance];
       const result = criterion.builtinKey
         ? evaluateBuiltIn(criterion.builtinKey, listing, searchableText)
-        : evaluateCustomCriterion(criterion, searchableText);
+        : evaluateCustomCriterion(
+            criterion,
+            searchableText,
+            customCriteriaValues
+          );
 
       return {
         id: criterion.id,
@@ -234,7 +250,8 @@ export function getCustomCriteriaMatchSummary({
     percentage:
       totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : null,
     missingMustHaves: signals.filter(
-      (signal) => signal.importance === "must-have" && !signal.matched
+      (signal) =>
+        signal.importance === "must-have" && signal.known && !signal.matched
     ),
   };
 }
