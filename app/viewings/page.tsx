@@ -1,6 +1,8 @@
 import Link from "next/link";
+/* eslint-disable @next/next/no-img-element */
 import AddToCalendarButton from "@/components/AddToCalendarButton";
 import AppHeader from "@/components/AppHeader";
+import { BackLink } from "@/components/BackButton";
 import StatusBadge from "@/components/StatusBadge";
 import { getAuthenticatedSupabaseClient } from "@/lib/auth";
 
@@ -227,12 +229,15 @@ export default async function ViewingsPage() {
         <AppHeader currentPath="/viewings" />
 
         <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <div className="mb-6">
-            <p className="text-sm font-medium text-slate-500">Schedule</p>
-            <h2 className="text-2xl font-bold text-slate-900">Viewings</h2>
-            <p className="text-sm text-slate-500">
-              Scheduled viewings split into upcoming and past.
-            </p>
+          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-500">Schedule</p>
+              <h2 className="text-2xl font-bold text-slate-900">Viewings</h2>
+              <p className="text-sm text-slate-500">
+                Scheduled viewings split into upcoming and past.
+              </p>
+            </div>
+            <BackLink href="/" label="Back" />
           </div>
 
           {!hasAnyViewings ? (

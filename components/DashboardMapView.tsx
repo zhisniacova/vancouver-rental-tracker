@@ -1,5 +1,6 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -260,11 +261,11 @@ export default function DashboardMapView({
       <section className="rounded-2xl bg-white p-6 text-center shadow-sm ring-1 ring-slate-200">
         <p className="text-sm font-medium text-slate-500">No pins yet</p>
         <h2 className="mt-1 text-xl font-semibold text-slate-900">
-          Geocode listings to see them on the map
+          Add or save listing addresses to see them on the map
         </h2>
         <p className="mx-auto mt-2 max-w-lg text-sm text-slate-500">
-          Open a listing with an address and use Find on map. Once coordinates
-          are saved, matching listings will appear here.
+          Autofill and listing saves geocode addresses automatically. Once
+          coordinates are saved, matching listings will appear here.
         </p>
       </section>
     );

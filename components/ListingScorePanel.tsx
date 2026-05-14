@@ -20,18 +20,24 @@ export default function ListingScorePanel({
   const { currentUser } = useCurrentUser();
   const [isSaving, setIsSaving] = useState(false);
 
-  async function updateScore(
-    field: "sasha_score" | "gleb_score",
-    value: string
-  ) {
+  async function updateScore(value: string) {
+    if (!currentUser) return;
+
     setIsSaving(true);
 
     const scoreValue = value === "" ? null : Number(value);
 
-    const { error } = await supabase
-      .from("listings")
-      .update({ [field]: scoreValue })
-      .eq("id", listingId);
+    const { error } = scoreValue === null
+      ? await supabase
+          .from("listing_scores")
+          .delete()
+          .eq("listing_id", listingId)
+          .eq("user_id", currentUser.id)
+      : await supabase.from("listing_scores").upsert({
+          listing_id: listingId,
+          user_id: currentUser.id,
+          score: scoreValue,
+        });
 
     if (error) {
       console.error("Error updating score:", error);
@@ -47,39 +53,24 @@ export default function ListingScorePanel({
   return (
     <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
       <p className="mb-2 text-sm font-medium text-slate-500">Quick scoring</p>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <select
-          value={sashaScore && sashaScore > 0 ? sashaScore : ""}
-          onChange={(e) => updateScore("sasha_score", e.target.value)}
-          disabled={isSaving}
-          className={`rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400 ${
-            currentUser?.displayName === "Sasha" ? "border-blue-300" : "border-slate-200"
-          } disabled:opacity-60`}
-        >
-          <option value="">Sasha score</option>
-          {Array.from({ length: 10 }, (_, i) => i + 1).map((score) => (
-            <option key={score} value={score}>
-              Sasha: {score}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={glebScore && glebScore > 0 ? glebScore : ""}
-          onChange={(e) => updateScore("gleb_score", e.target.value)}
-          disabled={isSaving}
-          className={`rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400 ${
-            currentUser?.displayName === "Gleb" ? "border-blue-300" : "border-slate-200"
-          } disabled:opacity-60`}
-        >
-          <option value="">Gleb score</option>
-          {Array.from({ length: 10 }, (_, i) => i + 1).map((score) => (
-            <option key={score} value={score}>
-              Gleb: {score}
-            </option>
-          ))}
-        </select>
-      </div>
+      <select
+        defaultValue={
+          (sashaScore && sashaScore > 0 ? sashaScore : "") ||
+          (glebScore && glebScore > 0 ? glebScore : "")
+        }
+        onChange={(e) => updateScore(e.target.value)}
+        disabled={isSaving || !currentUser}
+        className="w-full rounded-xl border border-blue-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60"
+      >
+        <option value="">
+          {currentUser ? `${currentUser.displayName} score` : "Your score"}
+        </option>
+        {Array.from({ length: 10 }, (_, i) => i + 1).map((score) => (
+          <option key={score} value={score}>
+            {score}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

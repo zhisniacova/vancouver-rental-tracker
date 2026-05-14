@@ -1,5 +1,13 @@
 "use client";
 
+import {
+  ChevronDown,
+  List,
+  Map,
+  Search,
+  SlidersHorizontal,
+  ArrowUpDown,
+} from "lucide-react";
 import { formatStatusLabel } from "./StatusBadge";
 import { useNeighborhoodOptions } from "./useNeighborhoodOptions";
 
@@ -12,6 +20,8 @@ type Props = {
   setSelectedStatuses: (value: string[]) => void;
   sort: string;
   setSort: (value: string) => void;
+  viewMode: "list" | "map";
+  setViewMode: (value: "list" | "map") => void;
 };
 
 type MultiSelectPopoverProps = {
@@ -48,11 +58,14 @@ function MultiSelectPopover({
   return (
     <details className="group relative w-full sm:min-w-[220px] sm:w-auto [&_summary::-webkit-details-marker]:hidden">
       <summary className="flex cursor-pointer list-none items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition hover:border-slate-300 sm:py-2">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-slate-400">{label}</p>
-          <p className="text-sm font-medium text-slate-700">{selectedLabel}</p>
+        <div className="flex min-w-0 items-center gap-3">
+          <SlidersHorizontal className="h-4 w-4 shrink-0 text-slate-400" />
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-wide text-slate-400">{label}</p>
+            <p className="truncate text-sm font-medium text-slate-700">{selectedLabel}</p>
+          </div>
         </div>
-        <span className="text-xs text-slate-500 transition group-open:rotate-180">▾</span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-slate-500 transition group-open:rotate-180" />
       </summary>
 
       <div className="absolute left-0 z-20 mt-2 w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white p-2 shadow-lg sm:w-72">
@@ -100,11 +113,13 @@ export default function FilterBar({
   setSelectedStatuses,
   sort,
   setSort,
+  viewMode,
+  setViewMode,
 }: Props) {
   const { neighborhoods } = useNeighborhoodOptions();
 
   const field =
-    "rounded-xl border border-slate-200 px-4 py-3 sm:py-2 text-slate-900 bg-white outline-none focus:border-slate-400";
+    "rounded-xl border border-slate-200 px-4 py-3 sm:py-2.5 text-slate-900 bg-white outline-none focus:border-slate-400";
 
   const statusOptions = [
     "to_process",
@@ -124,14 +139,19 @@ export default function FilterBar({
   }));
 
   return (
-    <section className="mb-6 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-      <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search title, address, notes, contact, URL..."
-          className={`min-w-0 flex-1 ${field}`}
-        />
+    <section className="mb-5 rounded-3xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200">
+      <div className="flex flex-col gap-3 xl:flex-row xl:flex-wrap xl:items-center">
+        <div className="relative min-w-0 flex-1">
+          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+            <Search className="h-4 w-4" />
+          </span>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search listings..."
+            className={`w-full pl-10 ${field}`}
+          />
+        </div>
 
         <MultiSelectPopover
           label="Neighborhoods"
@@ -149,18 +169,50 @@ export default function FilterBar({
           setSelectedValues={setSelectedStatuses}
         />
 
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value)}
-          className={`w-full lg:w-auto ${field}`}
-        >
-          <option value="none">Sort</option>
-          <option value="low">Price ↑</option>
-          <option value="high">Price ↓</option>
-          <option value="score">Top rated ⭐</option>
-          <option value="status_new_to_viewed">Status (New → Viewed)</option>
-          <option value="status_viewed_to_new">Status (Viewed → New)</option>
-        </select>
+        <label className="relative w-full xl:w-auto">
+          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+            <ArrowUpDown className="h-4 w-4" />
+          </span>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            className={`w-full appearance-none pl-10 pr-9 xl:w-56 ${field}`}
+          >
+            <option value="none">Sort</option>
+            <option value="low">Price ↑</option>
+            <option value="high">Price ↓</option>
+            <option value="score">Top rated</option>
+            <option value="status_new_to_viewed">Status (New → Viewed)</option>
+            <option value="status_viewed_to_new">Status (Viewed → New)</option>
+          </select>
+        </label>
+
+        <div className="grid grid-cols-2 rounded-2xl bg-slate-100 p-1">
+          <button
+            type="button"
+            onClick={() => setViewMode("list")}
+            className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold ${
+              viewMode === "list"
+                ? "bg-white text-slate-950 shadow-sm"
+                : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <List className="h-4 w-4" />
+            List
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("map")}
+            className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold ${
+              viewMode === "map"
+                ? "bg-white text-slate-950 shadow-sm"
+                : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <Map className="h-4 w-4" />
+            Map
+          </button>
+        </div>
       </div>
     </section>
   );

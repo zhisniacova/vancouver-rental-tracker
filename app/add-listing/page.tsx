@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackLink } from "@/components/BackButton";
 import ListingForm from "@/components/ListingForm";
 
 export default function AddListingPage() {
@@ -13,12 +13,7 @@ export default function AddListingPage() {
             </h1>
           </div>
 
-          <Link
-            href="/"
-            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-100 sm:py-2"
-          >
-            Back to dashboard
-          </Link>
+          <BackLink href="/" label="Back" />
         </div>
 
         <ListingForm />

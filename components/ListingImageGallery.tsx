@@ -1,5 +1,6 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
 
 type Props = {
@@ -11,6 +12,19 @@ export default function ListingImageGallery({ images, title }: Props) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const selectedImage = images[selectedIndex];
+  const hasMultipleImages = images.length > 1;
+
+  function showPrevious() {
+    setSelectedIndex((current) =>
+      current === 0 ? images.length - 1 : current - 1
+    );
+  }
+
+  function showNext() {
+    setSelectedIndex((current) =>
+      current === images.length - 1 ? 0 : current + 1
+    );
+  }
 
   if (images.length === 0) {
     return (
@@ -23,20 +37,47 @@ export default function ListingImageGallery({ images, title }: Props) {
   }
 
   return (
-    <section className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
-      <button
-        type="button"
-        onClick={() => setIsLightboxOpen(true)}
-        className="block aspect-[4/3] w-full overflow-hidden rounded-xl bg-slate-200 sm:aspect-[16/10]"
-      >
+    <section className="rounded-3xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
+      <div className="relative overflow-hidden rounded-2xl bg-slate-200">
+        <button
+          type="button"
+          onClick={() => setIsLightboxOpen(true)}
+          className="block aspect-[4/3] w-full sm:aspect-[16/10]"
+        >
         <img
           src={selectedImage}
           alt={title || "Listing image"}
           className="h-full w-full object-cover"
         />
-      </button>
+        </button>
 
-      {images.length > 1 && (
+        <span className="absolute right-3 top-3 rounded-full bg-slate-950/75 px-3 py-1 text-xs font-semibold text-white">
+          {selectedIndex + 1} / {images.length}
+        </span>
+
+        {hasMultipleImages && (
+          <>
+            <button
+              type="button"
+              onClick={showPrevious}
+              className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-lg font-bold text-slate-800 shadow-sm hover:bg-white"
+              aria-label="Previous image"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={showNext}
+              className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-lg font-bold text-slate-800 shadow-sm hover:bg-white"
+              aria-label="Next image"
+            >
+              ›
+            </button>
+          </>
+        )}
+      </div>
+
+      {hasMultipleImages && (
         <div className="mt-3 flex gap-2 overflow-x-auto">
           {images.map((image, index) => (
             <button

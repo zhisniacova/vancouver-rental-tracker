@@ -32,11 +32,11 @@ function sortByCreatedAtDescending(messages: MessageHistoryEntry[]) {
   });
 }
 
-function getSenderChipStyles(senderName: string | null) {
+function getSenderChipStyles(senderName: string | null, currentUserName: string) {
   if (senderName === "Rental") {
     return "bg-amber-100 text-amber-700";
   }
-  if (senderName === "Sasha" || senderName === "Gleb") {
+  if (senderName === currentUserName) {
     return "bg-blue-100 text-blue-700";
   }
   return "bg-slate-100 text-slate-700";
@@ -116,10 +116,10 @@ export default function MessageHistory({ listingId, initialMessages }: Props) {
         </p>
       </div>
 
-      <details className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-        <summary className="cursor-pointer list-none text-sm font-semibold text-slate-800">
-          Add message or reply
-          <span className="ml-2 font-normal text-slate-500">Log a follow-up</span>
+      <details className="group mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+        <summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+          <span className="group-open:hidden">Log a follow-up</span>
+          <span className="hidden group-open:inline">Hide follow-up form</span>
         </summary>
 
         <form onSubmit={handleAddEntry} className="mt-3 space-y-3">
@@ -210,7 +210,8 @@ export default function MessageHistory({ listingId, initialMessages }: Props) {
                     <div className="flex flex-wrap items-center gap-2">
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-medium ${getSenderChipStyles(
-                          message.sender_name
+                          message.sender_name,
+                          currentUserName
                         )}`}
                       >
                         {message.sender_name || "Unknown sender"}

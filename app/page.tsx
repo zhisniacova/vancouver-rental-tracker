@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import Dashboard from "@/components/Dashboard";
 import type { DashboardInitialFilters } from "@/components/Dashboard";
 import type { Listing } from "@/components/ListingCard";
@@ -84,6 +85,12 @@ async function getListings(): Promise<Listing[]> {
         .select("listing_id, user_id, score")
         .in("listing_id", listingIds)
     : { data: [] };
+  const { data: criteriaValues } = listingIds.length
+    ? await supabase
+        .from("listing_criteria_values")
+        .select("listing_id, criterion_id, value")
+        .in("listing_id", listingIds)
+    : { data: [] };
 
   const imagesByListing = new Map<string, ListingImage[]>();
   for (const image of images ?? []) {
@@ -105,6 +112,13 @@ async function getListings(): Promise<Listing[]> {
       score: score.score ?? null,
     });
     scoresByListing.set(score.listing_id, items);
+  }
+
+  const criteriaValuesByListing = new Map<string, Record<string, string | null>>();
+  for (const value of criteriaValues ?? []) {
+    const values = criteriaValuesByListing.get(value.listing_id) ?? {};
+    values[value.criterion_id] = value.value ?? null;
+    criteriaValuesByListing.set(value.listing_id, values);
   }
 
   return listings.map((item) => ({
@@ -141,6 +155,7 @@ async function getListings(): Promise<Listing[]> {
     latitude: item.latitude ?? null,
     longitude: item.longitude ?? null,
     formattedAddress: item.formatted_address ?? null,
+    customCriteriaValues: criteriaValuesByListing.get(item.id) ?? {},
   }));
 }
 
@@ -248,7 +263,24 @@ async function getFrequentPlaces(): Promise<FrequentPlace[]> {
 }
 
 export default async function Home({ searchParams }: HomeProps) {
-  const initialFilters = parseInitialFilters(await searchParams);
+  const rawSearchParams = await searchParams;
+  const { supabase, user } = await getAuthenticatedSupabaseClient();
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("onboarding_completed")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    console.error("Error fetching onboarding status:", profileError);
+  }
+
+  if (!profile?.onboarding_completed) {
+    redirect("/onboarding");
+  }
+
+  const initialFilters = parseInitialFilters(rawSearchParams);
+  const initialWorkspaceId = getFirstParam(rawSearchParams.workspace) ?? null;
   const listings = await getListings();
   const frequentPlaces = await getFrequentPlaces();
   const workspaceMembers = await getWorkspaceMembers();
@@ -256,7 +288,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 sm:py-8">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-[1500px]">
         <AppHeader currentPath="/" />
         <Dashboard
           listings={listings}
@@ -265,6 +297,7 @@ export default async function Home({ searchParams }: HomeProps) {
           workspaceMembers={workspaceMembers}
           workspaceCriteria={workspaceCriteria.criteria}
           memberCriteriaPreferences={workspaceCriteria.preferences}
+          initialWorkspaceId={initialWorkspaceId}
         />
       </div>
     </main>

@@ -1,7 +1,17 @@
 import Link from "next/link";
+import { type ReactNode } from "react";
 import AddToCalendarButton from "@/components/AddToCalendarButton";
-import ContactInfoCard from "@/components/ContactInfoCard";
-import GeocodeListingButton from "@/components/GeocodeListingButton";
+import DeleteListingButton from "@/components/DeleteListingButton";
+import {
+  Check as CheckIcon,
+  CircleHelp as QuestionIcon,
+  ExternalLink as ExternalLinkIcon,
+  MessageCircle as MessageIcon,
+  Pencil as PencilIcon,
+  TriangleAlert as AlertIcon,
+  X as XIcon,
+} from "lucide-react";
+import { BackLink } from "@/components/BackButton";
 import ListingImageGallery from "@/components/ListingImageGallery";
 import ListingInlineEditPanel from "@/components/ListingInlineEditPanel";
 import ListingMapPreview from "@/components/ListingMapPreview";
@@ -16,7 +26,6 @@ import {
   type FrequentPlace,
 } from "@/lib/commute";
 import {
-  getAverageCollaboratorScore,
   type ListingImage,
   type ListingScore,
   type WorkspaceMember,
@@ -198,6 +207,15 @@ async function getListingDetails(id: string) {
     console.error("Error fetching member criteria preferences:", memberPreferencesError);
   }
 
+  const { data: criteriaValues, error: criteriaValuesError } = await supabase
+    .from("listing_criteria_values")
+    .select("criterion_id, value")
+    .eq("listing_id", id);
+
+  if (criteriaValuesError) {
+    console.error("Error fetching listing criteria values:", criteriaValuesError);
+  }
+
   return {
     listing,
     preferences: normalizeRentalPreferences(rentalSearch?.criteria_preferences),
@@ -269,6 +287,9 @@ async function getListingDetails(id: string) {
       criterionId: preference.criterion_id,
       importance: preference.importance,
     })),
+    customCriteriaValues: Object.fromEntries(
+      (criteriaValues ?? []).map((value) => [value.criterion_id, value.value])
+    ) as Record<string, string | null>,
     places: ((places ?? []) as Array<{
       id: string;
       rental_search_id: string;
@@ -293,19 +314,6 @@ async function getListingDetails(id: string) {
       })
     ),
   };
-}
-
-function getLegacyAverageScore(listing: {
-  sasha_score: number | null;
-  gleb_score: number | null;
-}) {
-  const scores = [listing.sasha_score, listing.gleb_score].filter(
-    (score): score is number => score !== null && score > 0
-  );
-
-  if (scores.length === 0) return null;
-
-  return scores.reduce((sum, score) => sum + score, 0) / scores.length;
 }
 
 function getBudgetLabel(status: ReturnType<typeof getBudgetStatus>) {
@@ -334,38 +342,6 @@ function getSqftStyles(status: ReturnType<typeof getSqftStatus>) {
   if (status === "below-target") return "bg-amber-50 text-amber-700";
   if (status === "below-minimum") return "bg-rose-50 text-rose-700";
   return "bg-slate-100 text-slate-500";
-}
-
-function getCriteriaSymbol(signal: {
-  matched: boolean;
-  known: boolean;
-  importance: string;
-}) {
-  if (signal.matched) return "✓";
-  if (!signal.known) return "?";
-  return signal.importance === "must-have" ? "✕" : "!";
-}
-
-function getCriteriaStyles(signal: {
-  matched: boolean;
-  known: boolean;
-  importance: string;
-}) {
-  if (signal.matched) return "bg-emerald-50 text-emerald-700 ring-emerald-100";
-  if (signal.importance === "must-have") return "bg-rose-50 text-rose-700 ring-rose-100";
-  if (signal.known) return "bg-amber-50 text-amber-700 ring-amber-100";
-  return "bg-slate-100 text-slate-600 ring-slate-200";
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) return "Not scheduled";
-  return new Date(value).toLocaleString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 function CarIcon() {
@@ -417,6 +393,173 @@ function getListingImages(images: ListingImage[], coverImageUrl: string | null) 
   return coverImageUrl ? [coverImageUrl] : [];
 }
 
+function ActionLink({
+  href,
+  icon,
+  children,
+  primary = false,
+}: {
+  href: string;
+  icon: ReactNode;
+  children: ReactNode;
+  primary?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold ${
+        primary
+          ? "bg-slate-950 text-white hover:bg-slate-800"
+          : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+      }`}
+    >
+      {icon}
+      {children}
+    </Link>
+  );
+}
+
+function ExternalAction({
+  href,
+  icon,
+  children,
+}: {
+  href: string;
+  icon: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+    >
+      {icon}
+      {children}
+    </a>
+  );
+}
+
+function MissingMustHaves({
+  items,
+}: {
+  items: Array<{ label: string }>;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <p className="inline-flex items-center gap-2 text-sm font-semibold text-rose-700">
+        <AlertIcon className="h-4 w-4" />
+        Missing must-haves
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {items.map((item) => (
+          <span
+            key={item.label}
+            className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 ring-1 ring-rose-100"
+          >
+            {item.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CriteriaGroup({
+  title,
+  icon,
+  items,
+  className,
+}: {
+  title: string;
+  icon: ReactNode;
+  items: Array<{ key: string; label: string; summary: string }>;
+  className: string;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className={`rounded-2xl p-3 ring-1 ${className}`}>
+      <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+        {icon}
+        {title}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {items.map((item) => (
+          <span
+            key={`${title}-${item.key}`}
+            title={`${item.label}: ${item.summary}`}
+            className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold ring-1 ring-white/80"
+          >
+            {item.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CriteriaMatchPanel({
+  matchSummary,
+}: {
+  matchSummary: ReturnType<typeof getCustomCriteriaMatchSummary> | ReturnType<typeof getCriteriaMatchSummary>;
+}) {
+  const matched = matchSummary.signals.filter(
+    (signal) => signal.points > 0 && signal.matched
+  );
+  const unknown = matchSummary.signals.filter(
+    (signal) => signal.points > 0 && !signal.matched && !signal.known
+  );
+  const missing = matchSummary.signals.filter(
+    (signal) => signal.points > 0 && !signal.matched && signal.known
+  );
+
+  return (
+    <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-500">Decision fit</p>
+          <h2 className="text-xl font-bold text-slate-950">Criteria Match</h2>
+        </div>
+        <p className="text-3xl font-bold text-slate-950">
+          {matchSummary.percentage ?? "-"}%
+        </p>
+      </div>
+      {matchSummary.percentage !== null && (
+        <div className="mb-5 h-2 overflow-hidden rounded-full bg-slate-100">
+          <div
+            className="h-full rounded-full bg-slate-950"
+            style={{ width: `${matchSummary.percentage}%` }}
+          />
+        </div>
+      )}
+      <div className="grid gap-3 lg:grid-cols-3">
+        <CriteriaGroup
+          title="Matched"
+          icon={<CheckIcon className="h-4 w-4 text-emerald-700" />}
+          items={matched}
+          className="bg-emerald-50 text-emerald-700 ring-emerald-100"
+        />
+        <CriteriaGroup
+          title="Unknown"
+          icon={<QuestionIcon className="h-4 w-4 text-slate-500" />}
+          items={unknown}
+          className="bg-slate-100 text-slate-600 ring-slate-200"
+        />
+        <CriteriaGroup
+          title="Missing"
+          icon={<XIcon className="h-4 w-4 text-rose-700" />}
+          items={missing}
+          className="bg-rose-50 text-rose-700 ring-rose-100"
+        />
+      </div>
+    </section>
+  );
+}
+
 export default async function ListingDetailsPage({
   params,
   searchParams,
@@ -448,9 +591,8 @@ export default async function ListingDetailsPage({
     members,
     criteria,
     memberPreferences,
+    customCriteriaValues,
   } = data;
-  const averageScore =
-    getAverageCollaboratorScore(scores) ?? getLegacyAverageScore(listing);
   const pricePerSqft = getPricePerSqft(listing.price ?? 0, listing.sqft);
   const budgetStatus = getBudgetStatus(listing.price ?? 0, preferences);
   const sqftStatus = getSqftStatus(listing.sqft, preferences);
@@ -468,11 +610,9 @@ export default async function ListingDetailsPage({
         preferences: memberPreferences,
         listing: listingCriteriaInput,
         searchableText: `${listing.title} ${listing.location} ${listing.neighborhood} ${listing.raw_description}`,
+        customCriteriaValues,
       })
     : getCriteriaMatchSummary(preferences, listingCriteriaInput);
-  const criteriaSignals = matchSummary.signals.filter(
-    (signal) => signal.points > 0
-  );
   const listingImages = getListingImages(images, listing.cover_image_url);
   const commuteSummaries = getCommuteSummaries(
     {
@@ -512,12 +652,7 @@ export default async function ListingDetailsPage({
       <div className="mx-auto max-w-7xl">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
-            <Link
-              href={backHref}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-100 sm:py-2"
-            >
-              Back to dashboard
-            </Link>
+            <BackLink href={backHref} label="Back" />
             <NeedsActionNavigator currentListingId={listing.id} />
           </div>
 
@@ -554,204 +689,20 @@ export default async function ListingDetailsPage({
           )}
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-6">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
           <section className="space-y-5">
-            <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-5">
-              <p className="text-sm font-medium text-slate-500">
-                {listing.location || listing.neighborhood || "Address not saved"}
-              </p>
-              <h1 className="mt-1 text-2xl font-bold leading-tight text-slate-900 sm:text-3xl">
-                {listing.title || "Untitled listing"}
-              </h1>
-              <p className="mt-2 text-lg font-semibold text-slate-900">
-                {listing.price
-                  ? `$${listing.price.toLocaleString()}/mo`
-                  : "Price not set"}
-                {listing.sqft && (
-                  <span className="text-sm font-medium text-slate-500">
-                    {" "}
-                    • {listing.sqft.toLocaleString()} sqft
-                  </span>
-                )}
-                {pricePerSqft !== null && (
-                  <span className="text-sm font-medium text-slate-500">
-                    {" "}
-                    • ${pricePerSqft.toFixed(2)}/sqft
-                  </span>
-                )}
-              </p>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${getBudgetStyles(
-                    budgetStatus
-                  )}`}
-                >
-                  {getBudgetLabel(budgetStatus)}
-                </span>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${getSqftStyles(
-                    sqftStatus
-                  )}`}
-                >
-                  {getSqftLabel(sqftStatus)}
-                </span>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  Criteria {matchSummary.percentage ?? "—"}%
-                </span>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {criteriaSignals.map((signal) => (
-                  <span
-                    key={signal.key}
-                    title={`${signal.label}: ${signal.summary}`}
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${getCriteriaStyles(
-                      signal
-                    )}`}
-                  >
-                    {getCriteriaSymbol(signal)} {signal.label}
-                  </span>
-                ))}
-              </div>
-
-              {matchSummary.missingMustHaves.length > 0 && (
-                <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
-                  Missing must-have:{" "}
-                  {matchSummary.missingMustHaves
-                    .map((signal) => signal.label)
-                    .join(", ")}
-                </p>
-              )}
-              <ListingInlineEditPanel
-                listingId={listing.id}
-                title="Edit summary"
-                fields={[
-                  { name: "title", label: "Title", value: listing.title },
-                  { name: "location", label: "Address", value: listing.location },
-                  {
-                    name: "neighborhood",
-                    label: "Neighborhood",
-                    value: listing.neighborhood,
-                  },
-                  { name: "price", label: "Price", value: listing.price, type: "number" },
-                  { name: "sqft", label: "Sqft", value: listing.sqft, type: "number" },
-                ]}
-              />
-            </section>
-
             <ListingImageGallery
               images={listingImages}
               title={listing.title || "Listing image"}
             />
 
-            {commuteSummaries.length > 0 && (
-              <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-5">
-                <div className="mb-4">
-                  <p className="text-sm font-medium text-slate-500">
-                    Location intelligence
-                  </p>
-                  <h2 className="text-xl font-semibold text-slate-900">
-                    Estimated Commutes
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Simple drive and transit estimates based on saved workspace
-                    places.
-                  </p>
-                </div>
+            <CriteriaMatchPanel matchSummary={matchSummary} />
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {commuteSummaries.map((summary) => (
-                    <div
-                      key={summary.place.id}
-                      className={`rounded-xl p-4 ring-1 ${
-                        summary.exceedsDriveLimit || summary.exceedsTransitLimit
-                          ? "bg-rose-50 ring-rose-100"
-                          : "bg-slate-50 ring-slate-100"
-                      }`}
-                    >
-                      <p className="font-semibold text-slate-900">
-                        {summary.place.name}
-                      </p>
-                      <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-                        <div>
-                          <p
-                            className={`inline-flex items-center gap-2 text-xl font-bold ${
-                              summary.exceedsDriveLimit
-                                ? "text-rose-700"
-                                : "text-slate-900"
-                            }`}
-                          >
-                            <CarIcon />
-                            {formatDriveTime(summary.estimatedDrivingMinutes)}
-                          </p>
-                        </div>
-                        <div>
-                          <p
-                            className={`inline-flex items-center gap-2 text-xl font-bold ${
-                              summary.exceedsTransitLimit
-                                ? "text-rose-700"
-                                : "text-slate-900"
-                            }`}
-                          >
-                            <BusIcon />
-                            {formatDriveTime(summary.estimatedTransitMinutes)}
-                          </p>
-                        </div>
-                      </div>
-                      {(summary.exceedsDriveLimit ||
-                        summary.exceedsTransitLimit) && (
-                        <p className="mt-2 text-xs font-semibold text-rose-700">
-                          Over saved commute limit
-                        </p>
-                      )}
-                      <p className="mt-2 line-clamp-2 text-xs text-slate-500">
-                        {summary.place.formattedAddress ||
-                          summary.place.address}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-5">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-slate-500">Logistics</p>
-                  <h2 className="text-xl font-semibold text-slate-900">
-                    Important Details
-                  </h2>
-                </div>
-                <p className="text-sm font-medium text-slate-500">
-                  Avg score {averageScore !== null ? averageScore.toFixed(1) : "—"}
-                </p>
-              </div>
-
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {[
-                  ["Type", listing.listing_type || "—"],
-                  ["Furnished", listing.furnished || "—"],
-                  ["Move-in", listing.earliest_move_in || "—"],
-                  ["Pets", listing.pet_policy || "—"],
-                  ["Added by", listing.added_by || "—"],
-                  ["Messaged by", listing.messaged_by || "—"],
-                  ["Viewing", formatDateTime(listing.viewing_date)],
-                ].map(([label, value]) => (
-                  <div
-                    key={label}
-                    className="rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-slate-100"
-                  >
-                    <p className="text-[11px] font-medium text-slate-400">{label}</p>
-                    <p className="truncate text-sm font-semibold text-slate-800">
-                      {value}
-                    </p>
-                  </div>
-                ))}
-              </div>
+            <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
               <ListingInlineEditPanel
                 listingId={listing.id}
-                title="Edit logistics"
+                title="Important Details"
+                variant="inline"
                 fields={[
                   { name: "listing_type", label: "Type", value: listing.listing_type },
                   {
@@ -767,9 +718,73 @@ export default async function ListingDetailsPage({
                     value: listing.earliest_move_in,
                     type: "date",
                   },
-                  { name: "pet_policy", label: "Pets", value: listing.pet_policy },
+                  {
+                    name: "pet_policy",
+                    label: "Pets",
+                    value: listing.pet_policy,
+                    type: "select",
+                    options: ["Unknown", "Yes", "No"],
+                  },
+                  { name: "added_by", label: "Added by", value: listing.added_by },
+                  { name: "messaged_by", label: "Messaged by", value: listing.messaged_by },
                 ]}
               />
+            </section>
+
+            <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+              <div className="mb-4">
+                <p className="text-sm font-semibold text-slate-500">Location</p>
+                <h2 className="text-xl font-bold text-slate-950">
+                  Map & Rough Commute
+                </h2>
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                <ListingMapPreview
+                  latitude={listing.latitude}
+                  longitude={listing.longitude}
+                  formattedAddress={listing.formatted_address}
+                  compact
+                />
+
+                {commuteSummaries.length > 0 ? (
+                  <div className="grid gap-3">
+                    {commuteSummaries.map((summary) => (
+                      <div
+                        key={summary.place.id}
+                        className={`rounded-2xl p-4 ring-1 ${
+                          summary.exceedsDriveLimit || summary.exceedsTransitLimit
+                            ? "bg-rose-50 ring-rose-100"
+                            : "bg-slate-50 ring-slate-100"
+                        }`}
+                      >
+                        <p className="font-semibold text-slate-900">
+                          {summary.place.name}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-4 text-sm font-bold">
+                          <span className={`inline-flex items-center gap-2 ${summary.exceedsDriveLimit ? "text-rose-700" : "text-slate-900"}`}>
+                            <CarIcon />
+                            {formatDriveTime(summary.estimatedDrivingMinutes)}
+                          </span>
+                          <span className={`inline-flex items-center gap-2 ${summary.exceedsTransitLimit ? "text-rose-700" : "text-slate-900"}`}>
+                            <BusIcon />
+                            {formatDriveTime(summary.estimatedTransitMinutes)}
+                          </span>
+                        </div>
+                        {(summary.exceedsDriveLimit || summary.exceedsTransitLimit) && (
+                          <p className="mt-2 text-xs font-semibold text-rose-700">
+                            Over saved commute limit
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+                    Add frequent places in Settings to see commute estimates.
+                  </p>
+                )}
+              </div>
             </section>
 
             <ListingNotesPanel
@@ -779,13 +794,11 @@ export default async function ListingDetailsPage({
               cons={listing.cons}
             />
 
-            <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-5">
-              <details>
-                <summary className="cursor-pointer list-none text-lg font-semibold text-slate-900">
-                  Original Listing Details
-                  <span className="ml-2 text-sm font-medium text-slate-500">
-                    Show raw text
-                  </span>
+            <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+              <details className="group">
+                <summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50">
+                  <span className="group-open:hidden">Show raw text</span>
+                  <span className="hidden group-open:inline">Hide raw text</span>
                 </summary>
                 <p className="mt-4 whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">
                   {listing.raw_description || "No raw description saved yet."}
@@ -796,87 +809,137 @@ export default async function ListingDetailsPage({
             <MessageHistory listingId={listing.id} initialMessages={messages} />
           </section>
 
-          <aside className="space-y-5 lg:sticky lg:top-6 lg:self-start">
-            <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-              <p className="mb-3 text-sm font-medium text-slate-500">
-                Actions
-              </p>
+          <aside className="lg:w-[420px]">
+            <section className="space-y-5 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${getBudgetStyles(budgetStatus)}`}>
+                    {getBudgetLabel(budgetStatus)}
+                  </span>
+                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${getSqftStyles(sqftStatus)}`}>
+                    {getSqftLabel(sqftStatus)}
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+                    Criteria {matchSummary.percentage ?? "-"}%
+                  </span>
+                </div>
+
+                <div>
+                  <h1 className="text-2xl font-bold leading-tight text-slate-950">
+                    {listing.title || "Untitled listing"}
+                  </h1>
+                  <p className="mt-2 text-sm font-medium text-slate-500">
+                    {listing.location || listing.neighborhood || "Address not saved"}
+                  </p>
+                </div>
+
+                <p className="text-3xl font-bold tracking-tight text-slate-950">
+                  {listing.price
+                    ? `$${listing.price.toLocaleString()}/mo`
+                    : "Price not set"}
+                </p>
+                <p className="text-sm font-medium text-slate-500">
+                  {listing.sqft ? `${listing.sqft.toLocaleString()} sqft` : "Sqft not set"}
+                  {pricePerSqft !== null ? ` • $${pricePerSqft.toFixed(2)}/sqft` : ""}
+                </p>
+              </div>
+
+              <MissingMustHaves items={matchSummary.missingMustHaves} />
+
               <div className="grid gap-2">
-                <Link
+                <ActionLink
                   href={`/message/${listing.id}`}
-                  className="rounded-xl bg-slate-900 px-4 py-3 text-center text-sm font-medium text-white hover:bg-slate-700 sm:py-2"
+                  icon={<MessageIcon className="h-4 w-4" />}
+                  primary
                 >
                   Message
-                </Link>
-                {listing.url && (
-                  <a
-                    href={listing.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-xl border border-slate-200 px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50 sm:py-2"
+                </ActionLink>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                  {listing.url && (
+                    <ExternalAction
+                      href={listing.url}
+                      icon={<ExternalLinkIcon className="h-4 w-4" />}
+                    >
+                      Open
+                    </ExternalAction>
+                  )}
+                  <ActionLink
+                    href={`/edit/${listing.id}`}
+                    icon={<PencilIcon className="h-4 w-4" />}
                   >
-                    Open original
-                  </a>
-                )}
-                <Link
-                  href={`/edit/${listing.id}`}
-                  className="rounded-xl border border-slate-200 px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50 sm:py-2"
-                >
-                  Edit full listing
-                </Link>
-                <GeocodeListingButton
-                  listingId={listing.id}
-                  address={listing.location || listing.formatted_address}
-                  label={
-                    typeof listing.latitude === "number" &&
-                    typeof listing.longitude === "number"
-                      ? "Refresh map"
-                      : "Find on map"
-                  }
-                />
-                {listing.viewing_date && (
-                  <AddToCalendarButton
-                    listingId={listing.id}
-                    title={listing.title}
-                    viewingDate={listing.viewing_date}
-                    location={listing.formatted_address || listing.location}
-                    listingUrl={listing.url}
-                    contactName={listing.contact_name}
-                    contactEmail={listing.contact_email}
-                    contactPhone={listing.contact_phone}
-                    notes={listing.comments}
-                    status={listing.status}
-                  />
-                )}
+                    Edit
+                  </ActionLink>
+                  {listing.viewing_date && (
+                    <AddToCalendarButton
+                      listingId={listing.id}
+                      title={listing.title}
+                      viewingDate={listing.viewing_date}
+                      location={listing.formatted_address || listing.location}
+                      listingUrl={listing.url}
+                      contactName={listing.contact_name}
+                      contactEmail={listing.contact_email}
+                      contactPhone={listing.contact_phone}
+                      notes={listing.comments}
+                      status={listing.status}
+                      className="sm:col-span-2 lg:col-span-1 xl:col-span-2"
+                    />
+                  )}
+                </div>
               </div>
-            </div>
 
-            <ListingQuickEditPanel
-              listingId={listing.id}
-              viewingDate={listing.viewing_date}
-              status={listing.status}
-              sashaScore={listing.sasha_score}
-              glebScore={listing.gleb_score}
-              scores={scores}
-              members={members}
-            />
+              <div className="space-y-2 border-t border-slate-100 pt-4">
+                <ListingInlineEditPanel
+                  listingId={listing.id}
+                  title="Contact"
+                  variant="inline"
+                  fields={[
+                    { name: "contact_name", label: "Name", value: listing.contact_name },
+                    { name: "contact_email", label: "Email", value: listing.contact_email },
+                    { name: "contact_phone", label: "Phone", value: listing.contact_phone },
+                    {
+                      name: "contact_medium",
+                      label: "Medium",
+                      value: listing.contact_medium,
+                      type: "select",
+                      options: ["Unknown", "Website", "Email", "Phone", "Text"],
+                    },
+                    {
+                      name: "contact_details",
+                      label: "Details",
+                      value: listing.contact_details,
+                      type: "textarea",
+                    },
+                  ]}
+                />
+              </div>
 
-            <ListingMapPreview
-              latitude={listing.latitude}
-              longitude={listing.longitude}
-              formattedAddress={listing.formatted_address}
-              compact
-            />
-
-            <ContactInfoCard
-              name={listing.contact_name}
-              email={listing.contact_email}
-              phone={listing.contact_phone}
-              medium={listing.contact_medium}
-              details={listing.contact_details}
-            />
+              <div className="border-t border-slate-100 pt-4">
+                <ListingQuickEditPanel
+                  listingId={listing.id}
+                  viewingDate={listing.viewing_date}
+                  status={listing.status}
+                  sashaScore={listing.sasha_score}
+                  glebScore={listing.gleb_score}
+                  scores={scores}
+                  members={members}
+                  variant="embedded"
+                />
+              </div>
+            </section>
           </aside>
         </div>
+
+        <section className="mt-6 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-500">Danger zone</p>
+              <h2 className="text-xl font-bold text-slate-950">
+                Delete listing
+              </h2>
+            </div>
+            <DeleteListingButton listingId={listing.id} backHref={backHref} />
+          </div>
+        </section>
       </div>
     </main>
   );

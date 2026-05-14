@@ -28,6 +28,7 @@ type Props = {
   glebScore: number | null;
   scores?: ListingScore[];
   members?: WorkspaceMember[];
+  variant?: "card" | "embedded";
 };
 
 const STATUS_OPTIONS: ListingStatus[] = [
@@ -51,6 +52,7 @@ export default function ListingQuickEditPanel({
   glebScore,
   scores = [],
   members = [],
+  variant = "card",
 }: Props) {
   const router = useRouter();
   const { currentUser } = useCurrentUser();
@@ -141,18 +143,26 @@ export default function ListingQuickEditPanel({
   }
 
   return (
-    <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+    <section
+      className={
+        variant === "embedded"
+          ? ""
+          : "rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200"
+      }
+    >
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-slate-500">Viewing</p>
-          <h2 className="text-lg font-semibold text-slate-900">Quick actions</h2>
+          <h2 className="text-lg font-semibold text-slate-900">
+            Status & viewing
+          </h2>
         </div>
         {message && <p className="text-sm text-slate-500">{message}</p>}
       </div>
 
       <div className="space-y-3">
         <label className="block">
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <span className="mb-1 block text-xs font-medium text-slate-500">
             Date / time
           </span>
           <input
@@ -165,7 +175,7 @@ export default function ListingQuickEditPanel({
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <span className="mb-1 block text-xs font-medium text-slate-500">
             Status
           </span>
           <select
@@ -199,7 +209,7 @@ export default function ListingQuickEditPanel({
 
             return (
               <div key={member.userId}>
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <span className="mb-1 block text-xs font-medium text-slate-500">
               {getMemberDisplayName(member)}
             </span>
             <select
@@ -223,7 +233,7 @@ export default function ListingQuickEditPanel({
 
           {members.length === 0 && (
             <div>
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <span className="mb-1 block text-xs font-medium text-slate-500">
               {currentUser?.displayName ?? "Your score"}
             </span>
             <select

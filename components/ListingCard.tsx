@@ -1,7 +1,10 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+import { type MouseEvent, type ReactNode, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Check, ChevronLeft, ChevronRight, CircleHelp, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
   formatDriveTime,
@@ -71,6 +74,7 @@ export type Listing = {
   latitude?: number | null;
   longitude?: number | null;
   formattedAddress?: string | null;
+  customCriteriaValues?: Record<string, string | null>;
 };
 
 type Props = {
@@ -82,6 +86,7 @@ type Props = {
   memberCriteriaPreferences?: MemberCriterionPreference[];
   detailHref?: string;
   onOpenDetails?: () => void;
+  onOpenPreview?: () => void;
 };
 
 const STATUS_OPTIONS: Listing["status"][] = [
@@ -131,11 +136,49 @@ function getCriteriaSymbol(signal: {
   return signal.importance === "must-have" ? "✕" : "!";
 }
 
-function formatFurnished(value: string) {
-  if (value === "No") return "Not furnished";
-  if (value === "Yes") return "Furnished";
-  if (!value || value === "Unknown") return "Unknown furnished";
-  return value;
+function CriteriaCount({
+  icon,
+  label,
+  value,
+  className,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: number;
+  className: string;
+}) {
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-semibold ${className}`}>
+      {icon}
+      {value} {label}
+    </span>
+  );
+}
+
+function dedupeMembers(members: WorkspaceMember[]) {
+  const seen = new Set<string>();
+
+  return members.filter((member) => {
+    if (seen.has(member.userId)) return false;
+    seen.add(member.userId);
+    return true;
+  });
+}
+
+function getAddedByDisplayName(
+  addedBy: string | null | undefined,
+  members: WorkspaceMember[]
+) {
+  if (!addedBy) return "Added by -";
+
+  const member = members.find(
+    (workspaceMember) =>
+      workspaceMember.userId === addedBy ||
+      workspaceMember.email === addedBy ||
+      getMemberDisplayName(workspaceMember) === addedBy
+  );
+
+  return `Added by ${member ? getMemberDisplayName(member) : addedBy}`;
 }
 
 function getStatusSelectStyles(status: Listing["status"]) {
@@ -269,15 +312,26 @@ export default function ListingCard({
   workspaceMembers = [],
   workspaceCriteria = [],
   memberCriteriaPreferences = [],
-  detailHref,
   onOpenDetails,
+  onOpenPreview,
 }: Props) {
   const router = useRouter();
   const { currentUser } = useCurrentUser();
   const averageScore =
     getAverageCollaboratorScore(listing.scores) ?? getLegacyAverageScore(listing);
-  const resolvedDetailHref = detailHref ?? `/listing/${listing.id}`;
-  const cardImage = listing.images?.[0]?.url || listing.coverImageUrl;
+  const cardImages = useMemo(() => {
+    const orderedImages = [...(listing.images ?? [])]
+      .sort((a, b) => a.position - b.position)
+      .map((image) => image.url)
+      .filter(Boolean);
+    const urls = listing.coverImageUrl
+      ? [listing.coverImageUrl, ...orderedImages]
+      : orderedImages;
+
+    return Array.from(new Set(urls));
+  }, [listing.coverImageUrl, listing.images]);
+  const [imageIndex, setImageIndex] = useState(0);
+  const cardImage = cardImages[imageIndex] ?? null;
   const listingCriteriaInput = {
     parking: listing.parking,
     storageLocker: listing.storageLocker,
@@ -292,6 +346,7 @@ export default function ListingCard({
         preferences: memberCriteriaPreferences,
         listing: listingCriteriaInput,
         searchableText: `${listing.title} ${listing.location} ${listing.neighborhood} ${listing.rawDescription}`,
+        customCriteriaValues: listing.customCriteriaValues,
       })
     : preferences
       ? getCriteriaMatchSummary(preferences, listingCriteriaInput)
@@ -306,6 +361,14 @@ export default function ListingCard({
   const visibleSignals = matchSummary?.signals.filter(
     (signal) => signal.points > 0
   );
+  const matchedCriteriaCount =
+    visibleSignals?.filter((signal) => signal.matched).length ?? 0;
+  const missingCriteriaCount =
+    visibleSignals?.filter((signal) => !signal.matched && signal.known).length ??
+    0;
+  const unknownCriteriaCount =
+    visibleSignals?.filter((signal) => !signal.matched && !signal.known).length ??
+    0;
   const commuteSummaries = getCommuteSummaries(
     {
       latitude: listing.latitude,
@@ -409,16 +472,55 @@ export default function ListingCard({
   const currentUserScore = currentUser
     ? getScoreForUser(listing.scores, currentUser.id)
     : null;
-  const displayedMembers = workspaceMembers.length
-    ? workspaceMembers
-    : [
-        { userId: "sasha", nickname: "Sasha", fullName: null, email: null, phoneNumber: null, role: "member" as const },
-        { userId: "gleb", nickname: "Gleb", fullName: null, email: null, phoneNumber: null, role: "member" as const },
-      ];
+  const displayedMembers = dedupeMembers(
+    workspaceMembers
+  );
+  const addedByLabel = getAddedByDisplayName(listing.addedBy, displayedMembers);
+
+  function openPreview() {
+    if (onOpenPreview) {
+      onOpenPreview();
+      return;
+    }
+
+    if (onOpenDetails) {
+      onOpenDetails();
+    }
+  }
+
+  function handleCardClick(event: MouseEvent<HTMLElement>) {
+    const target = event.target as HTMLElement;
+    if (
+      target.closest(
+        "a, button, select, input, textarea, summary, details, [data-card-control]"
+      )
+    ) {
+      return;
+    }
+
+    openPreview();
+  }
+
+  function showPreviousImage(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    setImageIndex((current) =>
+      current === 0 ? cardImages.length - 1 : current - 1
+    );
+  }
+
+  function showNextImage(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    setImageIndex((current) =>
+      current === cardImages.length - 1 ? 0 : current + 1
+    );
+  }
 
   return (
-    <article className="flex h-full min-w-0 flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-      <div className="relative h-48 overflow-hidden rounded-t-2xl bg-slate-100">
+    <article
+      onClick={handleCardClick}
+      className="flex h-full min-w-0 cursor-pointer flex-col overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+    >
+      <div className="relative h-56 overflow-hidden bg-slate-100">
         <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
           {averageScore !== null && (
             <div className="rounded-full bg-slate-900/85 px-2.5 py-1 text-xs font-semibold text-white shadow-sm backdrop-blur-sm">
@@ -427,7 +529,10 @@ export default function ListingCard({
           )}
         </div>
 
-        <details className="group absolute right-3 top-3 z-20 [&_summary::-webkit-details-marker]:hidden">
+        <details
+          data-card-control
+          className="group absolute right-3 top-3 z-20 [&_summary::-webkit-details-marker]:hidden"
+        >
           <summary className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-full bg-white/90 text-lg font-bold leading-none text-slate-800 shadow-sm ring-1 ring-white/60 backdrop-blur-sm hover:bg-white">
             ⋯
           </summary>
@@ -465,68 +570,112 @@ export default function ListingCard({
           </div>
         </details>
 
-        {listing.images && listing.images.length > 1 && (
+        {cardImages.length > 1 && (
           <div className="absolute bottom-2 right-2 z-10 rounded-full bg-black/50 px-2 py-0.5 text-xs font-medium text-white">
-            1/{listing.images.length}
+            {imageIndex + 1}/{cardImages.length}
           </div>
         )}
 
-        {cardImage ? (
-          <img
-            src={cardImage}
-            alt={listing.title}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <svg
-              className="h-14 w-14 text-slate-300"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
+        {cardImages.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={showPreviousImage}
+              className="absolute left-3 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-slate-800 shadow-sm ring-1 ring-white/60 backdrop-blur-sm hover:bg-white"
+              aria-label="Previous listing image"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1}
-                d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
-              />
-            </svg>
-          </div>
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={showNextImage}
+              className="absolute right-3 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-slate-800 shadow-sm ring-1 ring-white/60 backdrop-blur-sm hover:bg-white"
+              aria-label="Next listing image"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </>
         )}
+
+        <button
+          type="button"
+          onClick={openPreview}
+          className="block h-full w-full text-left"
+          aria-label={`Preview ${listing.title}`}
+        >
+          {cardImage ? (
+            <img
+              src={cardImage}
+              alt={listing.title}
+              className="h-full w-full object-cover transition duration-200 hover:scale-[1.02]"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <svg
+                className="h-14 w-14 text-slate-300"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1}
+                  d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
+                />
+              </svg>
+            </div>
+          )}
+        </button>
 
       </div>
 
       <div className="flex flex-1 flex-col p-4 sm:p-5">
-        <select
-          value={listing.status}
-          aria-label="Listing status"
-          onChange={(e) =>
-            handleStatusChange(e.target.value as Listing["status"])
-          }
-          className={`mb-3 max-w-full rounded-full border px-3 py-1 text-xs font-semibold outline-none focus:border-slate-400 ${getStatusSelectStyles(
-            listing.status
-          )}`}
-        >
-          {STATUS_OPTIONS.map((status) => (
-            <option key={status} value={status}>
-              {formatStatusLabel(status)}
-            </option>
-          ))}
-        </select>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <p className="min-w-0 truncate text-xs font-medium text-slate-500">
+            {addedByLabel}
+          </p>
+          <select
+            value={listing.status}
+            aria-label="Listing status"
+            onChange={(e) =>
+              handleStatusChange(e.target.value as Listing["status"])
+            }
+            className={`max-w-full rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-none outline-none focus:border-slate-400 ${getStatusSelectStyles(
+              listing.status
+            )}`}
+          >
+            {STATUS_OPTIONS.map((status) => (
+              <option key={status} value={status}>
+                {formatStatusLabel(status)}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div className="mb-3">
           <div className="min-w-0 flex-1">
-            <h2 className="line-clamp-2 min-h-12 overflow-hidden text-lg font-semibold leading-6 text-slate-900">
+            <button
+              type="button"
+              onClick={openPreview}
+              className="line-clamp-2 min-h-12 overflow-hidden text-left text-lg font-bold leading-6 text-slate-950 hover:text-slate-700"
+            >
               {listing.title}
-            </h2>
-            <p className="truncate text-sm text-slate-500">{listing.neighborhood}</p>
+            </button>
+            <div className="mt-1 flex items-center justify-between gap-3 text-sm text-slate-500">
+              <p className="min-w-0 truncate">
+                {listing.neighborhood || listing.location || "Unknown location"}
+              </p>
+              <p className="shrink-0 truncate text-right font-medium text-slate-600">
+                {listing.type || "Type unknown"}
+              </p>
+            </div>
           </div>
         </div>
 
         <div className="mb-3 space-y-2">
-          <p className="text-xl font-bold text-slate-900">
+          <p className="text-2xl font-bold tracking-tight text-slate-950">
             {listing.price > 0
               ? `$${listing.price.toLocaleString()}/mo`
               : "Price unknown"}
@@ -552,36 +701,72 @@ export default function ListingCard({
         </div>
 
         {matchSummary && !isToProcess && (
-          <div className="mb-3 rounded-xl bg-slate-50 px-3 py-2">
+          <div className="mb-3 rounded-2xl bg-slate-50 px-3 py-2.5">
             <div className="mb-1.5 flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <p className="text-xs font-semibold text-slate-500">
                 Criteria match
               </p>
-              <p className="text-sm font-bold text-slate-900">
+              <p className="text-base font-bold text-slate-950">
                 {matchSummary.percentage === null
                   ? "—"
                   : `${matchSummary.percentage}%`}
               </p>
             </div>
-            <div className="flex flex-wrap gap-x-2 gap-y-1">
-              {visibleSignals?.map((signal) => (
-                <span
-                  key={signal.key}
-                  title={`${signal.label}: ${signal.summary}`}
-                  className={`text-[11px] font-semibold ${
-                    signal.matched
-                      ? "text-emerald-700"
-                      : signal.importance === "must-have"
-                        ? "text-rose-700"
-                        : signal.known
-                          ? "text-amber-700"
-                          : "text-slate-500"
-                  }`}
-                >
-                  {getCriteriaSymbol(signal)} {signal.label}
-                </span>
-              ))}
+            {matchSummary.percentage !== null && (
+              <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className="h-full rounded-full bg-slate-900"
+                  style={{ width: `${matchSummary.percentage}%` }}
+                />
+              </div>
+            )}
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              <CriteriaCount
+                icon={<Check className="h-3.5 w-3.5" />}
+                label="matched"
+                value={matchedCriteriaCount}
+                className="text-emerald-700"
+              />
+              <CriteriaCount
+                icon={<X className="h-3.5 w-3.5" />}
+                label="missing"
+                value={missingCriteriaCount}
+                className="text-rose-700"
+              />
+              <CriteriaCount
+                icon={<CircleHelp className="h-3.5 w-3.5" />}
+                label="unknown"
+                value={unknownCriteriaCount}
+                className="text-slate-500"
+              />
             </div>
+            {visibleSignals && visibleSignals.length > 0 && (
+              <details className="group mt-2 [&_summary::-webkit-details-marker]:hidden">
+                <summary className="inline-flex cursor-pointer list-none text-xs font-semibold text-slate-500 hover:text-slate-800">
+                  <span className="group-open:hidden">View details</span>
+                  <span className="hidden group-open:inline">Hide details</span>
+                </summary>
+                <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1">
+                  {visibleSignals.map((signal, index) => (
+                    <span
+                      key={`${signal.key}-${signal.label}-${index}`}
+                      title={`${signal.label}: ${signal.summary}`}
+                      className={`text-[11px] font-semibold ${
+                        !signal.known
+                          ? "text-slate-500"
+                          : signal.matched
+                            ? "text-emerald-700"
+                            : signal.importance === "must-have"
+                              ? "text-rose-700"
+                              : "text-amber-700"
+                      }`}
+                    >
+                      {getCriteriaSymbol(signal)} {signal.label}
+                    </span>
+                  ))}
+                </div>
+              </details>
+            )}
             {matchSummary.missingMustHaves.length > 0 && (
               <p className="mt-2 text-xs font-medium text-rose-700">
                 Missing must-have:{" "}
@@ -599,22 +784,15 @@ export default function ListingCard({
           </div>
         )}
 
-        <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-1 text-sm font-medium text-slate-600">
-          <p className="truncate">{listing.type || "—"}</p>
-          <p className="truncate">{formatFurnished(listing.furnished)}</p>
-          <p className="truncate">{listing.moveInDate || "—"}</p>
-          <p className="truncate">Added by {listing.addedBy || "—"}</p>
-        </div>
-
         {commuteSummaries.length > 0 && (
           <div className="mb-4 rounded-xl bg-slate-50 px-3 py-2">
             <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Commute estimate
+              Rough commute estimate
             </p>
             <div className="space-y-1">
-              {commuteSummaries.map((summary) => (
+              {commuteSummaries.map((summary, index) => (
                 <div
-                  key={summary.place.id}
+                  key={`${summary.place.id}-${index}`}
                   className="flex items-center justify-between gap-3 text-xs"
                 >
                   <span className="truncate font-medium text-slate-700">
@@ -648,7 +826,7 @@ export default function ListingCard({
           </div>
         )}
 
-        <details className="mb-4 rounded-xl border border-slate-200 bg-white [&_summary::-webkit-details-marker]:hidden">
+        <details className="mb-4 rounded-xl bg-slate-50 [&_summary::-webkit-details-marker]:hidden">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-medium text-slate-700">
             <span>
               Scores
@@ -660,17 +838,14 @@ export default function ListingCard({
             </span>
             <span className="text-xs text-slate-400">Edit</span>
           </summary>
-          <div className="space-y-2 border-t border-slate-100 p-3">
-            {displayedMembers.map((member) => {
+          <div className="space-y-2 p-3 pt-1">
+            {displayedMembers.map((member, index) => {
               const isCurrent = currentUser?.id === member.userId;
-              const score =
-                getScoreForUser(listing.scores, member.userId) ??
-                (member.nickname === "Sasha" ? listing.sashaScore ?? null : null) ??
-                (member.nickname === "Gleb" ? listing.glebScore ?? null : null);
+              const score = getScoreForUser(listing.scores, member.userId);
 
               return (
                 <ScoreRow
-                  key={member.userId}
+                  key={`${member.userId}-${index}`}
                   label={getMemberDisplayName(member)}
                   score={score}
                   isCurrentUser={isCurrent}
@@ -695,11 +870,11 @@ export default function ListingCard({
 
         {listing.comments && (
           <div className="mb-4 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            <p className="line-clamp-2">{listing.comments}</p>
+            <p className="line-clamp-1">{listing.comments}</p>
           </div>
         )}
 
-        <div className="mt-auto grid grid-cols-2 gap-2">
+        <div className="mt-auto grid gap-2">
           {isToProcess ? (
             <Link
               href={`/edit/${listing.id}`}
@@ -709,20 +884,12 @@ export default function ListingCard({
             </Link>
           ) : (
             <Link
-              href={resolvedDetailHref}
-              onClick={onOpenDetails}
-              className="rounded-xl border border-slate-200 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-100 sm:py-2"
+              href={`/message/${listing.id}`}
+              className="rounded-xl border border-blue-200 bg-blue-50 py-3 text-center text-sm font-medium text-blue-700 hover:bg-blue-100 sm:py-2"
             >
-              View
+              Message
             </Link>
           )}
-
-          <Link
-            href={`/message/${listing.id}`}
-            className="rounded-xl border border-blue-200 bg-blue-50 py-3 text-center text-sm font-medium text-blue-700 hover:bg-blue-100 sm:py-2"
-          >
-            Message
-          </Link>
 
         </div>
       </div>

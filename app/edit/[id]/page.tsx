@@ -1,4 +1,5 @@
 import ListingForm from "@/components/ListingForm";
+import { BackLink } from "@/components/BackButton";
 import { getAuthenticatedSupabaseClient } from "@/lib/auth";
 
 async function getListing(id: string) {
@@ -25,6 +26,15 @@ async function getListing(id: string) {
     console.error("Error fetching listing images:", imagesError);
   }
 
+  const { data: criteriaValues, error: criteriaValuesError } = await supabase
+    .from("listing_criteria_values")
+    .select("criterion_id, value, notes")
+    .eq("listing_id", id);
+
+  if (criteriaValuesError) {
+    console.error("Error fetching listing criteria values:", criteriaValuesError);
+  }
+
   return {
     ...data,
     images: (images ?? []).map((image) => ({
@@ -33,6 +43,7 @@ async function getListing(id: string) {
       position: image.position,
       source: image.source,
     })),
+    criteria_values: criteriaValues ?? [],
   };
 }
 
@@ -60,9 +71,12 @@ export default async function EditPage({ params }: EditPageProps) {
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 sm:py-8">
       <div className="mx-auto max-w-6xl">
-        <h1 className="mb-6 text-2xl font-bold text-slate-900 sm:text-3xl">
-          Edit Listing
-        </h1>
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">
+            Edit Listing
+          </h1>
+          <BackLink href={`/listing/${listing.id}`} label="Back" />
+        </div>
         <ListingForm existingListing={listing} />
       </div>
     </main>

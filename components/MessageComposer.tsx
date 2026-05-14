@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
@@ -119,6 +118,25 @@ function buildOutlookLink({
   return `https://outlook.office.com/mail/deeplink/compose?${params.toString()}`;
 }
 
+function buildSmsLink({
+  recipientPhone,
+  body,
+}: {
+  recipientPhone: string;
+  body: string;
+}) {
+  const phone = recipientPhone.replace(/[^\d+]/g, "");
+  const separator =
+    typeof navigator !== "undefined" &&
+    /iPad|iPhone|iPod/.test(navigator.userAgent)
+      ? "&"
+      : "?";
+
+  return `sms:${encodeURIComponent(phone)}${separator}body=${encodeURIComponent(
+    body
+  )}`;
+}
+
 function buildBody({
   listing,
   sender,
@@ -176,7 +194,9 @@ export default function MessageComposer({
     } satisfies WorkspaceMember);
 
   const [senderId, setSenderId] = useState(currentMember.userId);
-  const [messageType, setMessageType] = useState<MessageType>("Email");
+  const [messageType, setMessageType] = useState<MessageType>(
+    listing.contact_email ? "Email" : listing.contact_phone ? "SMS" : "Email"
+  );
   const [recipientName, setRecipientName] = useState(listing.contact_name ?? "");
   const [recipientEmail, setRecipientEmail] = useState(listing.contact_email ?? "");
   const [recipientPhone, setRecipientPhone] = useState(listing.contact_phone ?? "");
@@ -230,6 +250,11 @@ export default function MessageComposer({
   }, [recipientEmail, ccEmail, subject, body]);
   const primaryComposeHref = emailComposeLinks[preferredEmailProvider];
   const canOpenEmail = messageType === "Email" && Boolean(recipientEmail);
+  const canOpenSms = messageType === "SMS" && Boolean(recipientPhone);
+  const smsComposeHref = useMemo(
+    () => buildSmsLink({ recipientPhone, body }),
+    [recipientPhone, body]
+  );
 
   async function copyToClipboard() {
     const fullText =
@@ -284,7 +309,7 @@ export default function MessageComposer({
       return;
     }
 
-    router.push("/");
+    router.push(`/listing/${listing.id}`);
     router.refresh();
   }
 
@@ -347,7 +372,7 @@ export default function MessageComposer({
             >
               <option value="Email">Email</option>
               <option value="Website Message">Website Message</option>
-              <option value="SMS">SMS</option>
+              <option value="SMS">Text message</option>
             </select>
           </div>
 
@@ -464,24 +489,26 @@ export default function MessageComposer({
             Copy message
           </button>
 
-          <a
-            href={canOpenEmail ? primaryComposeHref : undefined}
-            target={
-              preferredEmailProvider === "default_app" ? undefined : "_blank"
-            }
-            rel={
-              preferredEmailProvider === "default_app"
-                ? undefined
-                : "noreferrer"
-            }
-            className={`rounded-xl px-4 py-3 text-center text-sm font-medium ${
-              canOpenEmail
-                ? "bg-blue-600 text-white hover:bg-blue-500"
-                : "pointer-events-none bg-slate-200 text-slate-500"
-            }`}
-          >
-            Open in {EMAIL_PROVIDER_LABELS[preferredEmailProvider]}
-          </a>
+          {messageType === "Email" && (
+            <a
+              href={canOpenEmail ? primaryComposeHref : undefined}
+              target={
+                preferredEmailProvider === "default_app" ? undefined : "_blank"
+              }
+              rel={
+                preferredEmailProvider === "default_app"
+                  ? undefined
+                  : "noreferrer"
+              }
+              className={`rounded-xl px-4 py-3 text-center text-sm font-medium ${
+                canOpenEmail
+                  ? "bg-blue-600 text-white hover:bg-blue-500"
+                  : "pointer-events-none bg-slate-200 text-slate-500"
+              }`}
+            >
+              Open in {EMAIL_PROVIDER_LABELS[preferredEmailProvider]}
+            </a>
+          )}
 
           {messageType === "Email" && (
             <div className="grid grid-cols-3 gap-2 sm:col-span-2">
@@ -522,6 +549,19 @@ export default function MessageComposer({
             </div>
           )}
 
+          {messageType === "SMS" && (
+            <a
+              href={canOpenSms ? smsComposeHref : undefined}
+              className={`rounded-xl px-4 py-3 text-center text-sm font-medium ${
+                canOpenSms
+                  ? "bg-blue-600 text-white hover:bg-blue-500"
+                  : "pointer-events-none bg-slate-200 text-slate-500"
+              }`}
+            >
+              Open Messages app
+            </a>
+          )}
+
           <button
             onClick={markAsMessaged}
             disabled={isUpdating}
@@ -529,13 +569,6 @@ export default function MessageComposer({
           >
             {isUpdating ? "Updating..." : "Mark as messaged"}
           </button>
-
-          <Link
-            href="/"
-            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
-          >
-            Back to dashboard
-          </Link>
         </div>
       </section>
     </div>

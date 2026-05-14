@@ -14,27 +14,6 @@ type Props = {
   className?: string;
 };
 
-function escapeIcsText(value: string) {
-  return value
-    .replace(/\\/g, "\\\\")
-    .replace(/;/g, "\\;")
-    .replace(/,/g, "\\,")
-    .replace(/\r?\n/g, "\\n");
-}
-
-function foldIcsLine(line: string) {
-  const chunks: string[] = [];
-  let remaining = line;
-
-  while (remaining.length > 75) {
-    chunks.push(remaining.slice(0, 75));
-    remaining = ` ${remaining.slice(75)}`;
-  }
-
-  chunks.push(remaining);
-  return chunks.join("\r\n");
-}
-
 function formatIcsDate(date: Date) {
   return date
     .toISOString()
@@ -56,12 +35,56 @@ function formatStatus(value?: string | null) {
     .join(" ");
 }
 
-function sanitizeFileName(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
+function buildGoogleCalendarLink({
+  summary,
+  startDate,
+  endDate,
+  location,
+  description,
+}: {
+  summary: string;
+  startDate: Date;
+  endDate: Date;
+  location?: string | null;
+  description: string;
+}) {
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: summary,
+    dates: `${formatIcsDate(startDate)}/${formatIcsDate(endDate)}`,
+  });
+
+  if (location) params.set("location", location);
+  if (description) params.set("details", description);
+
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function buildOutlookCalendarLink({
+  summary,
+  startDate,
+  endDate,
+  location,
+  description,
+}: {
+  summary: string;
+  startDate: Date;
+  endDate: Date;
+  location?: string | null;
+  description: string;
+}) {
+  const params = new URLSearchParams({
+    path: "/calendar/action/compose",
+    rru: "addevent",
+    subject: summary,
+    startdt: startDate.toISOString(),
+    enddt: endDate.toISOString(),
+  });
+
+  if (location) params.set("location", location);
+  if (description) params.set("body", description);
+
+  return `https://outlook.office.com/calendar/0/deeplink/compose?${params.toString()}`;
 }
 
 function buildDescription({
@@ -93,7 +116,6 @@ function buildDescription({
 }
 
 export default function AddToCalendarButton({
-  listingId,
   title,
   viewingDate,
   location,
@@ -107,67 +129,66 @@ export default function AddToCalendarButton({
 }: Props) {
   const startDate = parseViewingDate(viewingDate);
   const canExport = Boolean(startDate);
-
-  function handleDownload() {
-    if (!startDate) return;
-
-    const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
-    const listingTitle = title || "Untitled listing";
-    const summary = `Viewing: ${listingTitle}`;
-    const description = buildDescription({
-      listingUrl,
-      contactName,
-      contactEmail,
-      contactPhone,
-      status,
-      notes,
-    });
-    const uid = `viewing-${listingId}-${formatIcsDate(startDate)}@vancouver-rental-tracker`;
-    const lines = [
-      "BEGIN:VCALENDAR",
-      "VERSION:2.0",
-      "PRODID:-//Vancouver Rental Tracker//Viewings//EN",
-      "CALSCALE:GREGORIAN",
-      "METHOD:PUBLISH",
-      "BEGIN:VEVENT",
-      `UID:${uid}`,
-      `DTSTAMP:${formatIcsDate(new Date())}`,
-      `DTSTART:${formatIcsDate(startDate)}`,
-      `DTEND:${formatIcsDate(endDate)}`,
-      `SUMMARY:${escapeIcsText(summary)}`,
-      location ? `LOCATION:${escapeIcsText(location)}` : "",
-      description ? `DESCRIPTION:${escapeIcsText(description)}` : "",
-      listingUrl ? `URL:${escapeIcsText(listingUrl)}` : "",
-      "END:VEVENT",
-      "END:VCALENDAR",
-    ]
-      .filter(Boolean)
-      .map(foldIcsLine)
-      .join("\r\n");
-
-    const blob = new Blob([`${lines}\r\n`], {
-      type: "text/calendar;charset=utf-8",
-    });
-    const objectUrl = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    const filenameBase = sanitizeFileName(listingTitle) || "viewing";
-
-    link.href = objectUrl;
-    link.download = `${filenameBase}-viewing.ics`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(objectUrl);
-  }
+  const endDate = startDate
+    ? new Date(startDate.getTime() + 60 * 60 * 1000)
+    : null;
+  const listingTitle = title || "Untitled listing";
+  const summary = `Viewing: ${listingTitle}`;
+  const description = buildDescription({
+    listingUrl,
+    contactName,
+    contactEmail,
+    contactPhone,
+    status,
+    notes,
+  });
+  const googleCalendarHref =
+    startDate && endDate
+      ? buildGoogleCalendarLink({
+          summary,
+          startDate,
+          endDate,
+          location,
+          description,
+        })
+      : undefined;
+  const outlookCalendarHref =
+    startDate && endDate
+      ? buildOutlookCalendarLink({
+          summary,
+          startDate,
+          endDate,
+          location,
+          description,
+        })
+      : undefined;
 
   return (
-    <button
-      type="button"
-      onClick={handleDownload}
-      disabled={!canExport}
-      className={`rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:py-2 ${className}`}
-    >
-      Add to Calendar
-    </button>
+    <div className={`grid gap-2 sm:grid-cols-2 ${className}`}>
+      <a
+        href={canExport ? googleCalendarHref : undefined}
+        target="_blank"
+        rel="noreferrer"
+        className={`rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-sm font-medium sm:py-2 ${
+          canExport
+            ? "text-slate-700 hover:bg-slate-50"
+            : "pointer-events-none text-slate-300 opacity-60"
+        }`}
+      >
+        Google Calendar
+      </a>
+      <a
+        href={canExport ? outlookCalendarHref : undefined}
+        target="_blank"
+        rel="noreferrer"
+        className={`rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-sm font-medium sm:py-2 ${
+          canExport
+            ? "text-slate-700 hover:bg-slate-50"
+            : "pointer-events-none text-slate-300 opacity-60"
+        }`}
+      >
+        Outlook
+      </a>
+    </div>
   );
 }

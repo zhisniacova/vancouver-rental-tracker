@@ -1,5 +1,5 @@
 import MessageComposer from "@/components/MessageComposer";
-import Link from "next/link";
+import { BackLink } from "@/components/BackButton";
 import { getAuthenticatedSupabaseClient } from "@/lib/auth";
 import { type WorkspaceMember } from "@/lib/collaboration";
 
@@ -108,13 +108,7 @@ export default async function MessagePage({ params }: MessagePageProps) {
               Message Listing
             </h1>
           </div>
-          <Link
-            href={`/listing/${listing.id}`}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-          >
-            <span aria-hidden="true">←</span>
-            Back to listing
-          </Link>
+          <BackLink href={`/listing/${listing.id}`} label="Back" />
         </div>
 
         <MessageComposer
