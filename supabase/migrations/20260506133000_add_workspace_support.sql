@@ -149,10 +149,11 @@ $$;
 revoke all on function public.assign_existing_listings_to_owner_workspace(uuid, text)
   from public, anon, authenticated;
 
-select public.assign_existing_listings_to_owner_workspace(
-  'c3d5a937-597d-4c95-ade2-2aeff213b31e'::uuid,
-  'My Rental Search'
-);
+-- Existing listings can be assigned after choosing the intended owner:
+-- select public.assign_existing_listings_to_owner_workspace(
+--   '<owner-user-id>'::uuid,
+--   'My Rental Search'
+-- );
 
 alter table public.rental_searches enable row level security;
 alter table public.search_members enable row level security;

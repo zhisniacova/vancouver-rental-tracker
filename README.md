@@ -1,4 +1,4 @@
-# Vancouver Rental Tracker
+# Rental Search Tracker
 
 Deployed Site: [rental-search-tracker.vercel.app](https://rental-search-tracker.vercel.app/)
 
