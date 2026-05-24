@@ -48,19 +48,156 @@ const IMPORTANCE_POINTS: Record<ImportanceLevel, number> = {
 };
 
 export const DEFAULT_CRITERIA_SUGGESTIONS = [
+  "Balcony",
+  "EV charging",
   "Parking",
-  "Storage",
   "Gym",
   "In-suite laundry",
-  "Pets / pet policy",
+  "Storage",
+  "Dishwasher",
+  "Pets allowed",
+  "Smoke-free",
   "Furnished",
   "Sauna",
-  "Balcony",
   "Air conditioning",
-  "Dishwasher",
   "Concierge",
-  "EV charging",
 ];
+
+export type PredefinedCriterion = {
+  key: string;
+  label: string;
+  builtinKey: string | null;
+  keywords: string[];
+};
+
+export const PREDEFINED_CRITERIA: PredefinedCriterion[] = [
+  {
+    key: "parking",
+    label: "Parking",
+    builtinKey: "parking",
+    keywords: ["parking", "parking stall", "secure parking"],
+  },
+  {
+    key: "storage",
+    label: "Storage",
+    builtinKey: "storage",
+    keywords: ["storage", "storage locker"],
+  },
+  {
+    key: "gym",
+    label: "Gym",
+    builtinKey: "gym",
+    keywords: ["gym", "fitness centre", "fitness center", "fitness room"],
+  },
+  {
+    key: "in_suite_laundry",
+    label: "In-suite laundry",
+    builtinKey: "inSuiteLaundry",
+    keywords: [
+      "in-suite laundry",
+      "in suite laundry",
+      "ensuite laundry",
+      "in-unit laundry",
+      "washer dryer in suite",
+    ],
+  },
+  {
+    key: "pets",
+    label: "Pets allowed",
+    builtinKey: "pets",
+    keywords: [
+      "pets",
+      "pet friendly",
+      "pets allowed",
+      "pets / pet policy",
+      "pet policy",
+      "cats allowed",
+      "dogs allowed",
+    ],
+  },
+  {
+    key: "furnished",
+    label: "Furnished",
+    builtinKey: "furnished",
+    keywords: ["furnished", "fully furnished"],
+  },
+  {
+    key: "balcony",
+    label: "Balcony",
+    builtinKey: null,
+    keywords: ["balcony", "patio", "private outdoor space"],
+  },
+  {
+    key: "sauna",
+    label: "Sauna",
+    builtinKey: null,
+    keywords: ["sauna", "steam room"],
+  },
+  {
+    key: "air_conditioning",
+    label: "Air conditioning",
+    builtinKey: null,
+    keywords: ["air conditioning", "air conditioner", "a/c", "ac"],
+  },
+  {
+    key: "dishwasher",
+    label: "Dishwasher",
+    builtinKey: null,
+    keywords: ["dishwasher"],
+  },
+  {
+    key: "concierge",
+    label: "Concierge",
+    builtinKey: null,
+    keywords: ["concierge", "front desk"],
+  },
+  {
+    key: "ev_charging",
+    label: "EV charging",
+    builtinKey: null,
+    keywords: ["ev charging", "electric vehicle charging"],
+  },
+  {
+    key: "smoke_free",
+    label: "Smoke-free",
+    builtinKey: null,
+    keywords: ["smoke-free", "smoke free", "no smoking", "non-smoking"],
+  },
+];
+
+export function normalizeCriterionLabel(value: string) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+export function getCriterionKey(value: string) {
+  return normalizeCriterionLabel(value)
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+export function getPredefinedCriterion(value: string) {
+  const key = getCriterionKey(value);
+  const normalized = normalizeCriterionLabel(value).toLowerCase();
+
+  return (
+    PREDEFINED_CRITERIA.find(
+      (criterion) =>
+        criterion.key === key ||
+        criterion.label.toLowerCase() === normalized ||
+        criterion.keywords.some((keyword) => getCriterionKey(keyword) === key)
+    ) ?? null
+  );
+}
+
+export function isPredefinedCriterion(criterion: Pick<WorkspaceCriterion, "key" | "label" | "builtinKey">) {
+  return Boolean(
+    criterion.builtinKey ||
+      getPredefinedCriterion(criterion.key) ||
+      getPredefinedCriterion(criterion.label)
+  );
+}
 
 export function isImportanceLevel(value: unknown): value is ImportanceLevel {
   return (
@@ -151,7 +288,7 @@ function evaluateCustomCriterion(
   customCriteriaValues: Record<string, string | null | undefined> = {}
 ) {
   const explicitValue = customCriteriaValues[criterion.id];
-  if (explicitValue) {
+  if (explicitValue && explicitValue !== "Unknown") {
     return {
       matched: isYes(explicitValue),
       known: isKnown(explicitValue),

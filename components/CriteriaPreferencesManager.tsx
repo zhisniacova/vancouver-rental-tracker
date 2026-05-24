@@ -6,7 +6,11 @@ import { useCurrentUser } from "./CurrentUserProvider";
 import { useWorkspace } from "./WorkspaceProvider";
 import {
   DEFAULT_CRITERIA_SUGGESTIONS,
+  getCriterionKey,
+  getPredefinedCriterion,
+  isPredefinedCriterion,
   isImportanceLevel,
+  normalizeCriterionLabel,
   type MemberCriterionPreference,
   type WorkspaceCriterion,
 } from "@/lib/customCriteria";
@@ -27,14 +31,6 @@ const importanceLevels: ImportanceLevel[] = [
   "not important",
 ];
 
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
 export default function CriteriaPreferencesManager() {
   const { currentWorkspace, currentRentalSearchId } = useWorkspace();
   const { currentUser } = useCurrentUser();
@@ -47,11 +43,27 @@ export default function CriteriaPreferencesManager() {
 
   const activeCriteria = criteria.filter((criterion) => !criterion.archivedAt);
   const existingLabels = useMemo(
-    () => new Set(activeCriteria.map((criterion) => criterion.label.toLowerCase())),
+    () =>
+      new Set(
+        activeCriteria.flatMap((criterion) => {
+          const predefined =
+            getPredefinedCriterion(criterion.key) ??
+            getPredefinedCriterion(criterion.label);
+
+          return [
+            getCriterionKey(criterion.label),
+            getCriterionKey(criterion.key),
+            predefined?.key,
+          ].filter(Boolean) as string[];
+        })
+      ),
     [activeCriteria]
   );
   const suggestions = DEFAULT_CRITERIA_SUGGESTIONS.filter(
-    (suggestion) => !existingLabels.has(suggestion.toLowerCase())
+    (suggestion) => {
+      const predefined = getPredefinedCriterion(suggestion);
+      return !existingLabels.has(predefined?.key ?? getCriterionKey(suggestion));
+    }
   );
 
   const loadCriteria = useCallback(async () => {
@@ -158,20 +170,35 @@ export default function CriteriaPreferencesManager() {
 
   async function addCriterion(label: string) {
     if (!currentRentalSearchId || !currentUser) return;
-    const trimmed = label.trim();
-    if (!trimmed) return;
+    const predefined = getPredefinedCriterion(label);
+    const normalizedLabel =
+      predefined?.label ?? normalizeCriterionLabel(label);
+    if (!normalizedLabel) return;
+    const key = predefined?.key ?? getCriterionKey(normalizedLabel);
+    const existing = activeCriteria.find(
+      (criterion) =>
+        getCriterionKey(criterion.key) === key ||
+        getCriterionKey(criterion.label) === key
+    );
 
-    const { data, error } = await supabase
-      .from("rental_search_criteria")
-      .insert({
-        rental_search_id: currentRentalSearchId,
-        key: slugify(trimmed),
-        label: trimmed,
-        keywords: [trimmed],
-        created_by: currentUser.id,
-      })
-      .select("id")
-      .single();
+    const { data, error } = existing
+      ? { data: { id: existing.id }, error: null }
+      : await supabase
+          .from("rental_search_criteria")
+          .upsert(
+            {
+              rental_search_id: currentRentalSearchId,
+              key,
+              label: normalizedLabel,
+              builtin_key: predefined?.builtinKey ?? null,
+              keywords: predefined?.keywords ?? [normalizedLabel],
+              archived_at: null,
+              created_by: currentUser.id,
+            },
+            { onConflict: "rental_search_id,key" }
+          )
+          .select("id")
+          .single();
 
     if (error) {
       setMessage(`Could not add criterion: ${error.message}`);
@@ -235,7 +262,7 @@ export default function CriteriaPreferencesManager() {
 
       {suggestions.length > 0 && (
         <div className="mb-5 flex flex-wrap gap-2">
-          {suggestions.slice(0, 8).map((suggestion) => (
+          {suggestions.slice(0, 9).map((suggestion) => (
             <button
               type="button"
               key={suggestion}
@@ -265,7 +292,11 @@ export default function CriteriaPreferencesManager() {
                 <div>
                   <p className="font-semibold text-slate-900">{criterion.label}</p>
                   <p className="text-xs text-slate-500">
-                    {criterion.builtinKey ? "Built-in analyzer" : "Matches listing text"}
+                    {criterion.builtinKey
+                      ? "Built-in analyzer"
+                      : isPredefinedCriterion(criterion)
+                        ? "Predefined text analyzer"
+                        : "Custom text match"}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">

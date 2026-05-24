@@ -3,37 +3,47 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-export function useNeighborhoodOptions() {
+export function useNeighborhoodOptions(rentalSearchId?: string | null) {
   const [neighborhoods, setNeighborhoods] = useState<string[]>([]);
 
   async function loadNeighborhoods() {
+    if (!rentalSearchId) {
+      setNeighborhoods([]);
+      return;
+    }
+
     const { data, error } = await supabase
-      .from("neighborhoods")
-      .select("name")
-      .order("name", { ascending: true });
+      .from("listings")
+      .select("neighborhood")
+      .eq("rental_search_id", rentalSearchId)
+      .not("neighborhood", "is", null)
+      .order("neighborhood", { ascending: true });
 
     if (error) {
       console.error("Error loading neighborhoods:", error);
       return;
     }
 
-    setNeighborhoods(data.map((row) => row.name));
+    setNeighborhoods(
+      Array.from(
+        new Set(
+          data
+            .map((row) => row.neighborhood?.trim())
+            .filter((name): name is string => Boolean(name))
+        )
+      )
+    );
   }
 
   async function addNeighborhood(name: string) {
     const cleaned = name.trim();
     if (!cleaned) return;
 
-    const { error } = await supabase
-      .from("neighborhoods")
-      .upsert([{ name: cleaned }], { onConflict: "name" });
-
-    if (error) {
-      console.error("Error saving neighborhood:", error);
-      throw error;
-    }
-
-    await loadNeighborhoods();
+    setNeighborhoods((current) =>
+      current.some((name) => name.toLowerCase() === cleaned.toLowerCase())
+        ? current
+        : [...current, cleaned].sort((a, b) => a.localeCompare(b))
+    );
   }
 
   useEffect(() => {
@@ -41,9 +51,11 @@ export function useNeighborhoodOptions() {
 
     async function loadInitialNeighborhoods() {
       const { data, error } = await supabase
-        .from("neighborhoods")
-        .select("name")
-        .order("name", { ascending: true });
+        .from("listings")
+        .select("neighborhood")
+        .eq("rental_search_id", rentalSearchId)
+        .not("neighborhood", "is", null)
+        .order("neighborhood", { ascending: true });
 
       if (error) {
         console.error("Error loading neighborhoods:", error);
@@ -51,16 +63,28 @@ export function useNeighborhoodOptions() {
       }
 
       if (!isCancelled) {
-        setNeighborhoods(data.map((row) => row.name));
+        setNeighborhoods(
+          Array.from(
+            new Set(
+              data
+                .map((row) => row.neighborhood?.trim())
+                .filter((name): name is string => Boolean(name))
+            )
+          )
+        );
       }
     }
 
-    loadInitialNeighborhoods();
+    if (rentalSearchId) {
+      loadInitialNeighborhoods();
+    } else {
+      window.setTimeout(() => setNeighborhoods([]), 0);
+    }
 
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [rentalSearchId]);
 
   return {
     neighborhoods,

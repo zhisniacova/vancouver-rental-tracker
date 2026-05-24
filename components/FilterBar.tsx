@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   List,
@@ -9,7 +10,6 @@ import {
   ArrowUpDown,
 } from "lucide-react";
 import { formatStatusLabel } from "./StatusBadge";
-import { useNeighborhoodOptions } from "./useNeighborhoodOptions";
 
 type Props = {
   search: string;
@@ -22,6 +22,7 @@ type Props = {
   setSort: (value: string) => void;
   viewMode: "list" | "map";
   setViewMode: (value: "list" | "map") => void;
+  neighborhoodOptions: string[];
 };
 
 type MultiSelectPopoverProps = {
@@ -39,6 +40,8 @@ function MultiSelectPopover({
   selectedValues,
   setSelectedValues,
 }: MultiSelectPopoverProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const selectedLabel =
     selectedValues.length === 0
       ? allLabel
@@ -55,9 +58,27 @@ function MultiSelectPopover({
     setSelectedValues([...selectedValues, value]);
   }
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!popoverRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isOpen]);
+
   return (
-    <details className="group relative w-full sm:min-w-[220px] sm:w-auto [&_summary::-webkit-details-marker]:hidden">
-      <summary className="flex cursor-pointer list-none items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition hover:border-slate-300 sm:py-2">
+    <div ref={popoverRef} className="relative w-full sm:w-auto sm:min-w-[220px]">
+      <button
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+        className="flex w-full cursor-pointer list-none items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-slate-900 outline-none transition hover:border-slate-300 sm:py-2"
+        aria-expanded={isOpen}
+      >
         <div className="flex min-w-0 items-center gap-3">
           <SlidersHorizontal className="h-4 w-4 shrink-0 text-slate-400" />
           <div className="min-w-0">
@@ -65,12 +86,21 @@ function MultiSelectPopover({
             <p className="truncate text-sm font-medium text-slate-700">{selectedLabel}</p>
           </div>
         </div>
-        <ChevronDown className="h-4 w-4 shrink-0 text-slate-500 transition group-open:rotate-180" />
-      </summary>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-slate-500 transition ${
+            isOpen ? "rotate-180" : ""
+          }`}
+        />
+      </button>
 
-      <div className="absolute left-0 z-20 mt-2 w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white p-2 shadow-lg sm:w-72">
+      {isOpen && (
+      <div className="absolute left-0 z-50 mt-2 w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white p-2 shadow-xl sm:w-72">
         <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
-          {options.map((option) => {
+          {options.length === 0 ? (
+            <p className="px-2 py-2 text-sm text-slate-500">
+              No options in this workspace yet.
+            </p>
+          ) : options.map((option) => {
             const checked = selectedValues.includes(option.value);
 
             return (
@@ -100,7 +130,8 @@ function MultiSelectPopover({
           </button>
         )}
       </div>
-    </details>
+      )}
+    </div>
   );
 }
 
@@ -115,9 +146,8 @@ export default function FilterBar({
   setSort,
   viewMode,
   setViewMode,
+  neighborhoodOptions,
 }: Props) {
-  const { neighborhoods } = useNeighborhoodOptions();
-
   const field =
     "rounded-xl border border-slate-200 px-4 py-3 sm:py-2.5 text-slate-900 bg-white outline-none focus:border-slate-400";
 
@@ -133,7 +163,7 @@ export default function FilterBar({
     label: formatStatusLabel(status),
   }));
 
-  const neighborhoodOptions = neighborhoods.map((name) => ({
+  const neighborhoodSelectOptions = neighborhoodOptions.map((name) => ({
     value: name,
     label: name,
   }));
@@ -156,7 +186,7 @@ export default function FilterBar({
         <MultiSelectPopover
           label="Neighborhoods"
           allLabel="All Neighborhoods"
-          options={neighborhoodOptions}
+          options={neighborhoodSelectOptions}
           selectedValues={selectedNeighborhoods}
           setSelectedValues={setSelectedNeighborhoods}
         />

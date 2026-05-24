@@ -14,11 +14,7 @@ import {
   type ListingImage,
   type WorkspaceMember,
 } from "@/lib/collaboration";
-import {
-  isImportanceLevel,
-  type MemberCriterionPreference,
-  type WorkspaceCriterion,
-} from "@/lib/customCriteria";
+import { type WorkspaceCriterion } from "@/lib/customCriteria";
 
 type ListingStatus =
   | "to_process"
@@ -150,6 +146,9 @@ type Props = {
 const fieldClassName =
   "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-400 sm:text-sm";
 
+const warningFieldClassName =
+  "border-rose-300 bg-rose-50/40 focus:border-rose-500";
+
 const sectionClassName =
   "rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6";
 
@@ -162,13 +161,13 @@ type BuiltinCriterionFieldName =
 
 const BUILTIN_CRITERION_FIELDS: Record<
   string,
-  { label: string; name: BuiltinCriterionFieldName }
+  { name: BuiltinCriterionFieldName }
 > = {
-  parking: { label: "Parking", name: "parking" },
-  storage: { label: "Storage", name: "storageLocker" },
-  gym: { label: "Gym", name: "gym" },
-  inSuiteLaundry: { label: "In-suite laundry", name: "inSuiteWasher" },
-  pets: { label: "Pets / pet policy", name: "petPolicy" },
+  parking: { name: "parking" },
+  storage: { name: "storageLocker" },
+  gym: { name: "gym" },
+  inSuiteLaundry: { name: "inSuiteWasher" },
+  pets: { name: "petPolicy" },
 };
 
 function normalizeAmenityValue(value?: string | null): AmenityValue {
@@ -189,6 +188,29 @@ function normalizeAmenityValue(value?: string | null): AmenityValue {
   }
 
   return "Unknown";
+}
+
+function isValidEmail(value?: string | null) {
+  return Boolean(value?.trim().match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/));
+}
+
+function isLikelyPhone(value?: string | null) {
+  const digits = value?.replace(/\D/g, "") ?? "";
+  return digits.length >= 10 && digits.length <= 15;
+}
+
+function cleanExtractedContactName(value?: string | null) {
+  const cleaned = value?.trim() ?? "";
+  if (!cleaned) return "";
+  if (isValidEmail(cleaned) || isLikelyPhone(cleaned)) return "";
+  if (/^(unknown|n\/a|show contact info|contact)$/i.test(cleaned)) return "";
+  return cleaned;
+}
+
+function contactFieldClass(value: string, showWarning: boolean) {
+  return `${fieldClassName} ${
+    showWarning && !value.trim() ? warningFieldClassName : ""
+  }`;
 }
 
 function FormSection({
@@ -349,7 +371,10 @@ export default function ListingForm({ existingListing }: Props) {
   const { currentUser } = useCurrentUser();
   const { currentRentalSearchId, currentWorkspace, isLoadingWorkspaces } =
     useWorkspace();
-  const { neighborhoods, addNeighborhood } = useNeighborhoodOptions();
+  const criteriaWorkspaceId =
+    existingListing?.rental_search_id ?? currentRentalSearchId ?? null;
+  const { neighborhoods, addNeighborhood } =
+    useNeighborhoodOptions(criteriaWorkspaceId);
   const currentUserName = currentUser?.displayName ?? "Unknown";
 
   const [formData, setFormData] = useState<ListingFormData>(
@@ -361,9 +386,6 @@ export default function ListingForm({ existingListing }: Props) {
   const [workspaceCriteria, setWorkspaceCriteria] = useState<WorkspaceCriterion[]>(
     []
   );
-  const [criterionPreferences, setCriterionPreferences] = useState<
-    MemberCriterionPreference[]
-  >([]);
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>(
     []
   );
@@ -373,26 +395,13 @@ export default function ListingForm({ existingListing }: Props) {
   const [imageUrlInput, setImageUrlInput] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isAutofilling, setIsAutofilling] = useState(false);
+  const [contactExtractionAttempted, setContactExtractionAttempted] =
+    useState(Boolean(existingListing));
   const [autofillCooldownUntil, setAutofillCooldownUntil] = useState(0);
   const [message, setMessage] = useState("");
-  const criteriaWorkspaceId =
-    existingListing?.rental_search_id ?? currentRentalSearchId ?? null;
   const activeCriteria = useMemo(
     () => workspaceCriteria.filter((criterion) => !criterion.archivedAt),
     [workspaceCriteria]
-  );
-  const selectedCriteria = useMemo(
-    () =>
-      activeCriteria.filter((criterion) => {
-        const preference = criterionPreferences.find(
-          (item) =>
-            item.criterionId === criterion.id &&
-            item.userId === currentUser?.id
-        );
-
-        return Boolean(preference && preference.importance !== "not important");
-      }),
-    [activeCriteria, criterionPreferences, currentUser?.id]
   );
   const builtinCriteriaFields = useMemo(() => {
     const fields = new Map<
@@ -400,17 +409,22 @@ export default function ListingForm({ existingListing }: Props) {
       { label: string; name: BuiltinCriterionFieldName }
     >();
 
-    for (const criterion of selectedCriteria) {
+    for (const criterion of activeCriteria) {
       if (!criterion.builtinKey) continue;
       const field = BUILTIN_CRITERION_FIELDS[criterion.builtinKey];
-      if (field) fields.set(field.name, field);
+      if (field) {
+        fields.set(field.name, {
+          name: field.name,
+          label: criterion.label,
+        });
+      }
     }
 
     return [...fields.values()];
-  }, [selectedCriteria]);
-  const customCriteria = useMemo(
-    () => selectedCriteria.filter((criterion) => !criterion.builtinKey),
-    [selectedCriteria]
+  }, [activeCriteria]);
+  const textCriteria = useMemo(
+    () => activeCriteria.filter((criterion) => !criterion.builtinKey),
+    [activeCriteria]
   );
 
   useEffect(() => {
@@ -425,7 +439,6 @@ export default function ListingForm({ existingListing }: Props) {
   useEffect(() => {
     if (!criteriaWorkspaceId) {
       setWorkspaceCriteria([]);
-      setCriterionPreferences([]);
       return;
     }
 
@@ -437,20 +450,12 @@ export default function ListingForm({ existingListing }: Props) {
         .select("id, rental_search_id, key, label, builtin_key, keywords, archived_at")
         .eq("rental_search_id", criteriaWorkspaceId)
         .order("created_at", { ascending: true });
-      const { data: preferenceData, error: preferenceError } = currentUser?.id
-        ? await supabase
-            .from("search_member_criteria_preferences")
-            .select("rental_search_id, user_id, criterion_id, importance")
-            .eq("rental_search_id", criteriaWorkspaceId)
-            .eq("user_id", currentUser.id)
-        : { data: [], error: null };
 
       if (!isMounted) return;
 
-      if (error || preferenceError) {
-        console.error("Error loading workspace criteria:", error || preferenceError);
+      if (error) {
+        console.error("Error loading workspace criteria:", error);
         setWorkspaceCriteria([]);
-        setCriterionPreferences([]);
         return;
       }
 
@@ -465,16 +470,6 @@ export default function ListingForm({ existingListing }: Props) {
           archivedAt: criterion.archived_at,
         }))
       );
-      setCriterionPreferences(
-        (preferenceData ?? []).map((preference) => ({
-          rentalSearchId: preference.rental_search_id,
-          userId: preference.user_id,
-          criterionId: preference.criterion_id,
-          importance: isImportanceLevel(preference.importance)
-            ? preference.importance
-            : "not important",
-        }))
-      );
     }
 
     void loadWorkspaceCriteria();
@@ -482,7 +477,7 @@ export default function ListingForm({ existingListing }: Props) {
     return () => {
       isMounted = false;
     };
-  }, [criteriaWorkspaceId, currentUser?.id]);
+  }, [criteriaWorkspaceId]);
 
   useEffect(() => {
     if (!criteriaWorkspaceId) {
@@ -547,7 +542,7 @@ export default function ListingForm({ existingListing }: Props) {
   useEffect(() => {
     setCustomCriteriaValues((current) => {
       const next = { ...current };
-      for (const criterion of customCriteria) {
+      for (const criterion of textCriteria) {
         if (!next[criterion.id]) {
           next[criterion.id] =
             existingListing?.criteria_values?.find(
@@ -557,7 +552,7 @@ export default function ListingForm({ existingListing }: Props) {
       }
       return next;
     });
-  }, [customCriteria, existingListing?.criteria_values]);
+  }, [textCriteria, existingListing?.criteria_values]);
 
   const previewUrl = useMemo(() => {
     const firstImage = images[0];
@@ -642,6 +637,14 @@ export default function ListingForm({ existingListing }: Props) {
           ? "new"
           : data.status || (current.status === "to_process" ? "new" : current.status);
 
+      const extractedContactName = cleanExtractedContactName(data.contactName);
+      const extractedContactEmail = isValidEmail(data.contactEmail)
+        ? data.contactEmail!.trim()
+        : "";
+      const extractedContactPhone = isLikelyPhone(data.contactPhone)
+        ? data.contactPhone!.trim()
+        : "";
+
       return {
         ...current,
         title: data.title?.trim() || current.title,
@@ -660,11 +663,14 @@ export default function ListingForm({ existingListing }: Props) {
         imageUrl: data.imageUrl?.trim() || current.imageUrl,
         status,
         viewingDate,
-        contactName: data.contactName?.trim() || current.contactName,
-        contactEmail: data.contactEmail?.trim() || current.contactEmail,
-        contactPhone: data.contactPhone?.trim() || current.contactPhone,
-        contactMedium: data.contactMedium?.trim() || current.contactMedium,
-        contactDetails: data.contactDetails?.trim() || current.contactDetails,
+        contactName: current.contactName || extractedContactName,
+        contactEmail: current.contactEmail || extractedContactEmail,
+        contactPhone: current.contactPhone || extractedContactPhone,
+        contactMedium:
+          current.contactMedium !== "Unknown"
+            ? current.contactMedium
+            : data.contactMedium?.trim() || current.contactMedium,
+        contactDetails: current.contactDetails || data.contactDetails?.trim() || "",
         petPolicy: normalizeAmenityValue(data.petPolicy) || current.petPolicy,
       };
     });
@@ -681,7 +687,7 @@ export default function ListingForm({ existingListing }: Props) {
     if (autofillText) {
       setCustomCriteriaValues((current) => {
         const next = { ...current };
-        for (const criterion of customCriteria) {
+        for (const criterion of textCriteria) {
           if (
             (next[criterion.id] ?? "Unknown") === "Unknown" &&
             criterionMatchesText(criterion, autofillText)
@@ -751,6 +757,7 @@ export default function ListingForm({ existingListing }: Props) {
       }
 
       mergeAutofillData(data as AutofillListingResponse);
+      setContactExtractionAttempted(true);
       if (existingListing) {
         const autofillData = data as AutofillListingResponse;
         const location = autofillData.location?.trim();
@@ -846,6 +853,7 @@ export default function ListingForm({ existingListing }: Props) {
     setMessage("");
 
     try {
+      setContactExtractionAttempted(true);
       if (!existingListing && !currentRentalSearchId) {
         setMessage("Choose a workspace before saving a new listing.");
         setIsSaving(false);
@@ -938,7 +946,7 @@ export default function ListingForm({ existingListing }: Props) {
           if (imageError) throw imageError;
         }
 
-        if (customCriteria.length > 0) {
+        {
           const { error: deleteCriteriaError } = await supabase
             .from("listing_criteria_values")
             .delete()
@@ -946,17 +954,19 @@ export default function ListingForm({ existingListing }: Props) {
 
           if (deleteCriteriaError) throw deleteCriteriaError;
 
-          const { error: criteriaError } = await supabase
-            .from("listing_criteria_values")
-            .insert(
-              customCriteria.map((criterion) => ({
-                listing_id: savedListingId,
-                criterion_id: criterion.id,
-                value: customCriteriaValues[criterion.id] ?? "Unknown",
-              }))
-            );
+          if (textCriteria.length > 0) {
+            const { error: criteriaError } = await supabase
+              .from("listing_criteria_values")
+              .insert(
+                textCriteria.map((criterion) => ({
+                  listing_id: savedListingId,
+                  criterion_id: criterion.id,
+                  value: customCriteriaValues[criterion.id] ?? "Unknown",
+                }))
+              );
 
-          if (criteriaError) throw criteriaError;
+            if (criteriaError) throw criteriaError;
+          }
         }
 
         if (formData.location.trim()) {
@@ -1216,7 +1226,7 @@ export default function ListingForm({ existingListing }: Props) {
                 name="status"
                 value={formData.status}
                 onChange={handleChange}
-                className={fieldClassName}
+                className={`${fieldClassName} min-w-52 font-medium`}
               >
                 <option value="to_process">
                   {formatStatusLabel("to_process")}
@@ -1276,18 +1286,18 @@ export default function ListingForm({ existingListing }: Props) {
             </div>
           ))}
 
-          {customCriteria.length > 0 && (
+          {textCriteria.length > 0 && (
             <div className="md:col-span-2 lg:col-span-4">
               <div className="mb-3">
                 <p className="text-sm font-semibold text-slate-900">
-                  Custom criteria
+                  Additional criteria
                 </p>
                 <p className="text-xs text-slate-500">
-                  These come from Settings for the current workspace.
+                  These come from Settings or onboarding for the current workspace.
                 </p>
               </div>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {customCriteria.map((criterion) => (
+                {textCriteria.map((criterion) => (
                   <label key={criterion.id} className="block">
                     <span className="mb-2 block text-sm font-medium text-slate-700">
                       {criterion.label}
@@ -1312,7 +1322,7 @@ export default function ListingForm({ existingListing }: Props) {
             </div>
           )}
 
-          {builtinCriteriaFields.length === 0 && customCriteria.length === 0 && (
+          {builtinCriteriaFields.length === 0 && textCriteria.length === 0 && (
             <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500 md:col-span-2 lg:col-span-4">
               No criteria selected for this workspace. Add criteria in Settings
               to track them on listings.
@@ -1322,6 +1332,15 @@ export default function ListingForm({ existingListing }: Props) {
       </FormSection>
 
       <FormSection title="Contact Information">
+        {contactExtractionAttempted &&
+          (!formData.contactName.trim() ||
+            !formData.contactEmail.trim() ||
+            !formData.contactPhone.trim()) && (
+            <div className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              Some contact details are still missing. You can save the listing,
+              but review the source listing before messaging.
+            </div>
+          )}
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
@@ -1333,7 +1352,10 @@ export default function ListingForm({ existingListing }: Props) {
               value={formData.contactName}
               onChange={handleChange}
               placeholder="Landlord or contact person"
-              className={fieldClassName}
+              className={contactFieldClass(
+                formData.contactName,
+                contactExtractionAttempted
+              )}
             />
           </div>
 
@@ -1347,7 +1369,10 @@ export default function ListingForm({ existingListing }: Props) {
               value={formData.contactEmail}
               onChange={handleChange}
               placeholder="name@example.com"
-              className={fieldClassName}
+              className={contactFieldClass(
+                formData.contactEmail,
+                contactExtractionAttempted
+              )}
             />
           </div>
 
@@ -1361,7 +1386,10 @@ export default function ListingForm({ existingListing }: Props) {
               value={formData.contactPhone}
               onChange={handleChange}
               placeholder="604-123-4567"
-              className={fieldClassName}
+              className={contactFieldClass(
+                formData.contactPhone,
+                contactExtractionAttempted
+              )}
             />
           </div>
 

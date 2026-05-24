@@ -89,7 +89,7 @@ function buildBrowseHref({
 }
 
 async function getListingDetails(id: string) {
-  const { supabase } = await getAuthenticatedSupabaseClient();
+  const { supabase, user } = await getAuthenticatedSupabaseClient();
   const { data: listing, error: listingError } = await supabase
     .from("listings")
     .select("*")
@@ -290,6 +290,7 @@ async function getListingDetails(id: string) {
     customCriteriaValues: Object.fromEntries(
       (criteriaValues ?? []).map((value) => [value.criterion_id, value.value])
     ) as Record<string, string | null>,
+    currentUserId: user.id,
     places: ((places ?? []) as Array<{
       id: string;
       rental_search_id: string;
@@ -504,9 +505,30 @@ function CriteriaGroup({
 
 function CriteriaMatchPanel({
   matchSummary,
+  needsPreferences,
 }: {
-  matchSummary: ReturnType<typeof getCustomCriteriaMatchSummary> | ReturnType<typeof getCriteriaMatchSummary>;
+  matchSummary:
+    | ReturnType<typeof getCustomCriteriaMatchSummary>
+    | ReturnType<typeof getCriteriaMatchSummary>
+    | null;
+  needsPreferences?: boolean;
 }) {
+  if (!matchSummary) {
+    return (
+      <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+        <p className="text-sm font-semibold text-slate-500">Decision fit</p>
+        <h2 className="mt-1 text-xl font-bold text-slate-950">
+          Criteria Match
+        </h2>
+        <p className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+          {needsPreferences
+            ? "Set preferences to calculate match."
+            : "Criteria match is not available yet."}
+        </p>
+      </section>
+    );
+  }
+
   const matched = matchSummary.signals.filter(
     (signal) => signal.points > 0 && signal.matched
   );
@@ -592,6 +614,7 @@ export default async function ListingDetailsPage({
     criteria,
     memberPreferences,
     customCriteriaValues,
+    currentUserId,
   } = data;
   const pricePerSqft = getPricePerSqft(listing.price ?? 0, listing.sqft);
   const budgetStatus = getBudgetStatus(listing.price ?? 0, preferences);
@@ -604,8 +627,16 @@ export default async function ListingDetailsPage({
     petPolicy: listing.pet_policy,
     furnished: listing.furnished,
   };
+  const hasCurrentUserCriteriaPreferences = memberPreferences.some(
+    (preference) =>
+      preference.userId === currentUserId &&
+      preference.importance !== "not important"
+  );
+  const needsPreferences = criteria.length > 0 && !hasCurrentUserCriteriaPreferences;
   const matchSummary = criteria.length
-    ? getCustomCriteriaMatchSummary({
+    ? needsPreferences
+      ? null
+      : getCustomCriteriaMatchSummary({
         criteria,
         preferences: memberPreferences,
         listing: listingCriteriaInput,
@@ -696,7 +727,10 @@ export default async function ListingDetailsPage({
               title={listing.title || "Listing image"}
             />
 
-            <CriteriaMatchPanel matchSummary={matchSummary} />
+            <CriteriaMatchPanel
+              matchSummary={matchSummary}
+              needsPreferences={needsPreferences}
+            />
 
             <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
               <ListingInlineEditPanel
@@ -820,7 +854,7 @@ export default async function ListingDetailsPage({
                     {getSqftLabel(sqftStatus)}
                   </span>
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
-                    Criteria {matchSummary.percentage ?? "-"}%
+                    Criteria {matchSummary?.percentage ?? "-"}%
                   </span>
                 </div>
 
@@ -844,7 +878,7 @@ export default async function ListingDetailsPage({
                 </p>
               </div>
 
-              <MissingMustHaves items={matchSummary.missingMustHaves} />
+              <MissingMustHaves items={matchSummary?.missingMustHaves ?? []} />
 
               <div className="grid gap-2">
                 <ActionLink

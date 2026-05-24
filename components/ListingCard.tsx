@@ -1,7 +1,14 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { type MouseEvent, type ReactNode, useMemo, useState } from "react";
+import {
+  type MouseEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, ChevronLeft, ChevronRight, CircleHelp, X } from "lucide-react";
@@ -331,6 +338,8 @@ export default function ListingCard({
     return Array.from(new Set(urls));
   }, [listing.coverImageUrl, listing.images]);
   const [imageIndex, setImageIndex] = useState(0);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const cardImage = cardImages[imageIndex] ?? null;
   const listingCriteriaInput = {
     parking: listing.parking,
@@ -340,14 +349,23 @@ export default function ListingCard({
     petPolicy: listing.petPolicy,
     furnished: listing.furnished,
   };
+  const hasCurrentUserCriteriaPreferences = currentUser
+    ? memberCriteriaPreferences.some(
+        (preference) =>
+          preference.userId === currentUser.id &&
+          preference.importance !== "not important"
+      )
+    : false;
   const matchSummary = workspaceCriteria.length
-    ? getCustomCriteriaMatchSummary({
+    ? hasCurrentUserCriteriaPreferences
+      ? getCustomCriteriaMatchSummary({
         criteria: workspaceCriteria,
         preferences: memberCriteriaPreferences,
         listing: listingCriteriaInput,
         searchableText: `${listing.title} ${listing.location} ${listing.neighborhood} ${listing.rawDescription}`,
         customCriteriaValues: listing.customCriteriaValues,
       })
+      : null
     : preferences
       ? getCriteriaMatchSummary(preferences, listingCriteriaInput)
       : null;
@@ -477,6 +495,19 @@ export default function ListingCard({
   );
   const addedByLabel = getAddedByDisplayName(listing.addedBy, displayedMembers);
 
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isMenuOpen]);
+
   function openPreview() {
     if (onOpenPreview) {
       onOpenPreview();
@@ -529,19 +560,28 @@ export default function ListingCard({
           )}
         </div>
 
-        <details
+        <div
           data-card-control
-          className="group absolute right-3 top-3 z-20 [&_summary::-webkit-details-marker]:hidden"
+          ref={menuRef}
+          className="absolute right-3 top-3 z-30"
         >
-          <summary className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-full bg-white/90 text-lg font-bold leading-none text-slate-800 shadow-sm ring-1 ring-white/60 backdrop-blur-sm hover:bg-white">
+          <button
+            type="button"
+            onClick={() => setIsMenuOpen((current) => !current)}
+            className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-full bg-white/90 text-lg font-bold leading-none text-slate-800 shadow-sm ring-1 ring-white/60 backdrop-blur-sm hover:bg-white"
+            aria-label="Listing actions"
+            aria-expanded={isMenuOpen}
+          >
             ⋯
-          </summary>
-          <div className="absolute right-0 mt-2 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-sm shadow-lg">
+          </button>
+          {isMenuOpen && (
+          <div className="absolute right-0 z-30 mt-2 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-sm shadow-lg">
             {listing.url && (
               <a
                 href={listing.url}
                 target="_blank"
                 rel="noreferrer"
+                onClick={() => setIsMenuOpen(false)}
                 className="block px-3 py-2 text-slate-700 hover:bg-slate-50"
               >
                 Open original
@@ -556,6 +596,7 @@ export default function ListingCard({
             </button>
             <Link
               href={`/edit/${listing.id}`}
+              onClick={() => setIsMenuOpen(false)}
               className="block px-3 py-2 text-slate-700 hover:bg-slate-50"
             >
               Edit
@@ -568,7 +609,8 @@ export default function ListingCard({
               Delete
             </button>
           </div>
-        </details>
+          )}
+        </div>
 
         {cardImages.length > 1 && (
           <div className="absolute bottom-2 right-2 z-10 rounded-full bg-black/50 px-2 py-0.5 text-xs font-medium text-white">
@@ -642,7 +684,7 @@ export default function ListingCard({
             onChange={(e) =>
               handleStatusChange(e.target.value as Listing["status"])
             }
-            className={`max-w-full rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-none outline-none focus:border-slate-400 ${getStatusSelectStyles(
+            className={`h-9 min-w-28 max-w-[9.5rem] rounded-full border px-2.5 py-1 text-xs font-semibold leading-tight outline-none focus:border-slate-400 ${getStatusSelectStyles(
               listing.status
             )}`}
           >
@@ -699,6 +741,17 @@ export default function ListingCard({
             </span>
           </div>
         </div>
+
+        {!matchSummary && workspaceCriteria.length > 0 && !isToProcess && (
+          <div className="mb-3 rounded-2xl bg-slate-50 px-3 py-2.5">
+            <p className="text-xs font-semibold text-slate-500">
+              Criteria match
+            </p>
+            <p className="mt-1 text-sm font-semibold text-slate-700">
+              Set preferences to calculate match.
+            </p>
+          </div>
+        )}
 
         {matchSummary && !isToProcess && (
           <div className="mb-3 rounded-2xl bg-slate-50 px-3 py-2.5">

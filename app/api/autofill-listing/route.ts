@@ -344,12 +344,49 @@ function extractEmail(value: string) {
   return value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] || "";
 }
 
+function extractEmailFromHtml(html: string, pageText: string) {
+  for (const match of html.matchAll(/href=["']mailto:([^"'?]+)[^"']*["']/gi)) {
+    const email = extractEmail(decodeHtml(match[1]));
+    if (email) return email;
+  }
+
+  return extractEmail(pageText);
+}
+
 function extractPhone(value: string) {
   return (
     value.match(
       /(?:\+?1[\s.-]?)?(?:\(?[2-9]\d{2}\)?[\s.-]?)?[2-9]\d{2}[\s.-]?\d{4}/
     )?.[0] || ""
   );
+}
+
+function cleanContactName(value: string) {
+  const cleaned = decodeHtml(value)
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^contact\s+/i, "");
+
+  if (!cleaned) return "";
+  if (extractEmail(cleaned) || extractPhone(cleaned)) return "";
+  if (/^(unknown|show contact info|reply|contact|landlord)$/i.test(cleaned)) {
+    return "";
+  }
+
+  return cleaned;
+}
+
+function extractContactNameFromHtml(html: string, pageText: string) {
+  const replyName = getFirstMatch(html, [
+    /<[^>]+class=["'][^"']*\breply-name\b[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i,
+    /<[^>]+class=["'][^"']*\bcontact-name\b[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i,
+    /<[^>]+itemprop=["']name["'][^>]*>([\s\S]*?)<\/[^>]+>/i,
+  ]);
+  const fromStructuredText =
+    pageText.match(/\b(?:contact|ask for|text|call)\s+([A-Z][A-Za-z'-]{1,30})\b/)?.[1] ||
+    "";
+
+  return cleanContactName(replyName) || cleanContactName(fromStructuredText);
 }
 
 function extractPhoneFromHtml(html: string, pageText: string) {
@@ -874,7 +911,7 @@ function inferFromDescription(rawDescription: string, postedAt: string) {
     inSuiteWasher,
     furnished,
     petPolicy,
-    contactName: contactNameMatch?.[1] || "",
+    contactName: cleanContactName(contactNameMatch?.[1] || ""),
     contactEmail,
     contactPhone,
     contactMedium,
@@ -1056,7 +1093,7 @@ async function enrichWithAi(
           {
             role: "system",
             content:
-              "Extract rental listing facts from the provided description. Prefer explicit statements only. Return Unknown when the description does not clearly say Yes or No. For petPolicy, return only Yes, No, or Unknown. For location, return the best full street address if one appears anywhere in the title, website location, or description. Replace vague areas like Downtown or Vancouver with the street address when the description contains one. For neighborhood, infer from the street address when possible; otherwise use the most specific stated neighborhood. Do not infer amenities from neighborhood or vibes. inSuiteWasher means in-suite/in-unit/ensuite laundry only; shared laundry, laundry room, coin laundry, or laundry on the floor must be No, not Yes. earliestMoveIn must be YYYY-MM-DD or empty. viewingDate must be YYYY-MM-DDTHH:mm or empty. If viewing date text omits year, infer year from posted date context. If the text says a showing/viewing time is scheduled, set status to viewing_scheduled; otherwise use new. Ignore webpage button text like show contact info; do not copy it or instructions containing it into contactDetails. If a real phone number appears, put it in contactPhone. For Facebook Marketplace hidden contact info, use contactMedium Website and summarize it in contactDetails.",
+              "Extract rental listing facts from the provided description. Prefer explicit statements only. Return Unknown when the description does not clearly say Yes or No. For petPolicy, return only Yes, No, or Unknown. For location, return the best full street address if one appears anywhere in the title, website location, or description. Replace vague areas like Downtown or Vancouver with the street address when the description contains one. For neighborhood, infer from the street address when possible; otherwise use the most specific stated neighborhood. Do not infer amenities from neighborhood or vibes. inSuiteWasher means in-suite/in-unit/ensuite laundry only; shared laundry, laundry room, coin laundry, or laundry on the floor must be No, not Yes. earliestMoveIn must be YYYY-MM-DD or empty. viewingDate must be YYYY-MM-DDTHH:mm or empty. If viewing date text omits year, infer year from posted date context. If the text says a showing/viewing time is scheduled, set status to viewing_scheduled; otherwise use new. For contactName, return only a real person/company name explicitly shown in the listing; never put an email, phone number, 'landlord', 'contact', or button text there. For contactEmail and contactPhone, return only valid values that appear explicitly. Ignore webpage button text like show contact info; do not copy it or instructions containing it into contactDetails. For Facebook Marketplace hidden contact info, use contactMedium Website and summarize it in contactDetails.",
           },
           {
             role: "user",
@@ -1120,9 +1157,9 @@ async function enrichWithAi(
     const aiPetPolicy = normalizeAmenity(aiData.petPolicy);
     const aiStatus = normalizeListingStatus(aiData.status);
     const aiViewingDate = normalizeDateTimeLocal(aiData.viewingDate || "");
-    const aiContactName = (aiData.contactName || "").trim();
-    const aiContactEmail = (aiData.contactEmail || "").trim();
-    const aiContactPhone = (aiData.contactPhone || "").trim();
+    const aiContactName = cleanContactName(aiData.contactName || "");
+    const aiContactEmail = extractEmail(aiData.contactEmail || "");
+    const aiContactPhone = extractPhone(aiData.contactPhone || "");
     const aiContactMedium = normalizeContactMedium(aiData.contactMedium);
     const aiContactDetails = cleanContactDetails(
       (aiData.contactDetails || "").trim(),
@@ -1308,8 +1345,11 @@ function scrapeListing(html: string): AutofillListingData {
       ? data.inSuiteWasher
       : descriptionSignals.inSuiteWasher;
   data.petPolicy = descriptionSignals.petPolicy;
-  data.contactName = descriptionSignals.contactName;
-  data.contactEmail = descriptionSignals.contactEmail;
+  data.contactName =
+    descriptionSignals.contactName ||
+    extractContactNameFromHtml(html, combinedText);
+  data.contactEmail =
+    descriptionSignals.contactEmail || extractEmailFromHtml(html, combinedText);
   data.contactPhone =
     descriptionSignals.contactPhone || extractPhoneFromHtml(html, combinedText);
   data.contactMedium = descriptionSignals.contactMedium;

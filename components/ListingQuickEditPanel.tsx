@@ -184,7 +184,7 @@ export default function ListingQuickEditPanel({
               handleStatusChange(event.target.value as ListingStatus)
             }
             disabled={isSaving}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-base text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60 sm:py-2 sm:text-sm"
+            className="w-full min-w-48 rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-900 outline-none focus:border-slate-400 disabled:opacity-60 sm:text-sm"
           >
             {STATUS_OPTIONS.map((option) => (
               <option key={option} value={option}>

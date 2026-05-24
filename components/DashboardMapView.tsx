@@ -333,7 +333,9 @@ export default function DashboardMapView({
                 </p>
                 <p className="mt-2 text-xs font-medium text-slate-600">
                   Criteria{" "}
-                  {activeCriteriaPercentage === null
+                  {!preferences
+                    ? "Set preferences"
+                    : activeCriteriaPercentage === null
                     ? "—"
                     : `${activeCriteriaPercentage}%`}
                 </p>
