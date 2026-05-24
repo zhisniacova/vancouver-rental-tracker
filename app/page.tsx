@@ -262,12 +262,24 @@ async function getFrequentPlaces(): Promise<FrequentPlace[]> {
   }));
 }
 
+async function getWorkspaceName(workspaceId: string | null) {
+  if (!workspaceId) return null;
+  const { supabase } = await getAuthenticatedSupabaseClient();
+  const { data } = await supabase
+    .from("rental_searches")
+    .select("name")
+    .eq("id", workspaceId)
+    .maybeSingle();
+
+  return data?.name ?? null;
+}
+
 export default async function Home({ searchParams }: HomeProps) {
   const rawSearchParams = await searchParams;
   const { supabase, user } = await getAuthenticatedSupabaseClient();
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("onboarding_completed")
+    .select("onboarding_completed, has_seen_tutorial")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -281,6 +293,10 @@ export default async function Home({ searchParams }: HomeProps) {
 
   const initialFilters = parseInitialFilters(rawSearchParams);
   const initialWorkspaceId = getFirstParam(rawSearchParams.workspace) ?? null;
+  const joinedWorkspaceName =
+    getFirstParam(rawSearchParams.joined) === "1"
+      ? await getWorkspaceName(initialWorkspaceId)
+      : null;
   const listings = await getListings();
   const frequentPlaces = await getFrequentPlaces();
   const workspaceMembers = await getWorkspaceMembers();
@@ -298,6 +314,8 @@ export default async function Home({ searchParams }: HomeProps) {
           workspaceCriteria={workspaceCriteria.criteria}
           memberCriteriaPreferences={workspaceCriteria.preferences}
           initialWorkspaceId={initialWorkspaceId}
+          joinedWorkspaceName={joinedWorkspaceName}
+          hasSeenTutorial={Boolean(profile?.has_seen_tutorial)}
         />
       </div>
     </main>

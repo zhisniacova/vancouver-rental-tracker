@@ -88,6 +88,7 @@ export default async function SettingsPage() {
               {[
                 ["#profile", "Profile"],
                 ["#message-template", "Message Template"],
+                ["#product-tour", "Product Tour"],
                 ["#search-basics", "Search Basics"],
                 ["#criteria", "Criteria"],
                 ["#places", "Places"],

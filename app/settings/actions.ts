@@ -41,6 +41,11 @@ export type FeedbackFormState = {
   message?: string;
 };
 
+export type TutorialFormState = {
+  error?: string;
+  message?: string;
+};
+
 function getOptionalString(formData: FormData, key: string) {
   const value = formData.get(key);
   if (typeof value !== "string") return null;
@@ -97,6 +102,33 @@ export async function updateProfile(
         ? "Message template saved."
         : "Profile saved.",
   };
+}
+
+export async function restartTutorial(
+  _prevState: TutorialFormState,
+  _formData: FormData
+): Promise<TutorialFormState> {
+  void _prevState;
+  void _formData;
+
+  const { supabase, user } = await getAuthenticatedSupabaseClient();
+  const { error } = await supabase
+    .from("profiles")
+    .upsert(
+      {
+        id: user.id,
+        has_seen_tutorial: false,
+      },
+      { onConflict: "id" }
+    );
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/settings");
+  return { message: "Tour will appear the next time you open the dashboard." };
 }
 
 export async function createWorkspace(

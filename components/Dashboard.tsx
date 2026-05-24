@@ -1,7 +1,14 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -17,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import ListingCard, { type Listing } from "./ListingCard";
+import DashboardTour from "./DashboardTour";
 import DashboardMapView from "./DashboardMapView";
 import FilterBar from "./FilterBar";
 import { supabase } from "@/lib/supabase";
@@ -49,6 +57,8 @@ type Props = {
   workspaceCriteria: WorkspaceCriterion[];
   memberCriteriaPreferences: MemberCriterionPreference[];
   initialWorkspaceId?: string | null;
+  joinedWorkspaceName?: string | null;
+  hasSeenTutorial?: boolean;
 };
 
 function getAverageScore(listing: Listing) {
@@ -957,6 +967,8 @@ export default function Dashboard({
   workspaceCriteria,
   memberCriteriaPreferences,
   initialWorkspaceId,
+  joinedWorkspaceName,
+  hasSeenTutorial = false,
 }: Props) {
   const { currentUser } = useCurrentUser();
   const {
@@ -1063,6 +1075,36 @@ export default function Dashboard({
         (preference) => preference.rentalSearchId === activeRentalSearchId
       )
     : memberCriteriaPreferences;
+  const hasCurrentUserCriteriaPreferences = currentUser
+    ? currentMemberCriteriaPreferences.some(
+        (preference) =>
+          preference.userId === currentUser.id &&
+          preference.importance !== "not important"
+      )
+    : false;
+  const activeMapPreferences =
+    currentCriteria.length > 0 && !hasCurrentUserCriteriaPreferences
+      ? undefined
+      : activeWorkspace?.criteriaPreferences;
+  const neighborhoodOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          workspaceListings
+            .map((listing) => listing.neighborhood?.trim())
+            .filter((neighborhood): neighborhood is string => Boolean(neighborhood))
+        )
+      ).sort((a, b) => a.localeCompare(b)),
+    [workspaceListings]
+  );
+
+  const selectedWorkspaceNeighborhoods = useMemo(() => {
+    if (selectedNeighborhoods.length === 0) return [];
+    const allowedNeighborhoods = new Set(neighborhoodOptions);
+    return selectedNeighborhoods.filter((neighborhood) =>
+      allowedNeighborhoods.has(neighborhood)
+    );
+  }, [neighborhoodOptions, selectedNeighborhoods]);
 
   const filtered = workspaceListings
     .filter((listing) => {
@@ -1071,9 +1113,9 @@ export default function Dashboard({
       return searchableText(listing).includes(query);
     })
     .filter((listing) =>
-      selectedNeighborhoods.length === 0
+      selectedWorkspaceNeighborhoods.length === 0
         ? true
-        : selectedNeighborhoods.includes(listing.neighborhood)
+        : selectedWorkspaceNeighborhoods.includes(listing.neighborhood)
     )
     .filter((listing) =>
       selectedStatuses.length === 0
@@ -1293,6 +1335,12 @@ export default function Dashboard({
           </div>
         </div>
 
+        {joinedWorkspaceName && (
+          <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+            You joined {joinedWorkspaceName}.
+          </div>
+        )}
+
         {workspaceListings.length === 0 ? (
           <DashboardEmptyState />
         ) : (
@@ -1300,7 +1348,8 @@ export default function Dashboard({
             <FilterBar
               search={search}
               setSearch={setSearch}
-              selectedNeighborhoods={selectedNeighborhoods}
+              neighborhoodOptions={neighborhoodOptions}
+              selectedNeighborhoods={selectedWorkspaceNeighborhoods}
               setSelectedNeighborhoods={setSelectedNeighborhoods}
               selectedStatuses={selectedStatuses}
               setSelectedStatuses={setSelectedStatuses}
@@ -1317,7 +1366,7 @@ export default function Dashboard({
             ) : viewMode === "map" ? (
               <DashboardMapView
                 listings={mapListings}
-                preferences={activeWorkspace?.criteriaPreferences}
+                preferences={activeMapPreferences}
                 apiKey={googleMapsApiKey}
                 onOpenDetails={rememberDashboardScroll}
               />
@@ -1365,6 +1414,7 @@ export default function Dashboard({
           />
         </>
       )}
+      <DashboardTour hasSeenTutorial={hasSeenTutorial} />
     </div>
   );
 }

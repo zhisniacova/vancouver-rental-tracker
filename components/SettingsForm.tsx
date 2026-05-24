@@ -2,6 +2,7 @@
 
 import { useActionState, useMemo, useRef, useState } from "react";
 import {
+  restartTutorial,
   updateProfile,
   type SettingsFormState,
 } from "@/app/settings/actions";
@@ -36,6 +37,10 @@ export default function SettingsForm({ profile, email }: Props) {
   );
   const [templateState, templateAction, templatePending] = useActionState(
     updateProfile,
+    initialState
+  );
+  const [tutorialState, tutorialAction, tutorialPending] = useActionState(
+    restartTutorial,
     initialState
   );
   const templateTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -383,6 +388,41 @@ export default function SettingsForm({ profile, email }: Props) {
         {templateState.message && (
           <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
             {templateState.message}
+          </p>
+        )}
+      </form>
+
+      <form
+        id="product-tour"
+        action={tutorialAction}
+        className="scroll-mt-6 rounded-[1.75rem] bg-white p-5 shadow-sm sm:p-6"
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-slate-500">Help</p>
+            <h2 className="text-2xl font-bold tracking-tight text-slate-950">
+              Product Tour
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Restart the lightweight dashboard walkthrough.
+            </p>
+          </div>
+          <button
+            type="submit"
+            disabled={tutorialPending}
+            className="rounded-2xl bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-60"
+          >
+            {tutorialPending ? "Saving..." : "Restart tour"}
+          </button>
+        </div>
+        {tutorialState.error && (
+          <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+            {tutorialState.error}
+          </p>
+        )}
+        {tutorialState.message && (
+          <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {tutorialState.message}
           </p>
         )}
       </form>
