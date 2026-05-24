@@ -3,11 +3,15 @@ import JoinInviteForm from "@/components/JoinInviteForm";
 import { getCurrentUser } from "@/lib/auth";
 
 type JoinPageProps = {
-  searchParams: Promise<{ token?: string }>;
+  searchParams: Promise<{ token?: string | string[] }>;
 };
 
-export default async function JoinPage({ searchParams }: JoinPageProps) {
-  const { token } = await searchParams;
+function getFirstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function Page({ searchParams }: JoinPageProps) {
+  const token = getFirstParam((await searchParams).token)?.trim();
 
   if (!token) {
     return (

@@ -11,6 +11,11 @@ import {
   type ImportanceLevel,
   type RentalCriteriaPreferences,
 } from "@/lib/rentalPreferences";
+import {
+  getCriterionKey,
+  getPredefinedCriterion,
+  normalizeCriterionLabel,
+} from "@/lib/customCriteria";
 
 export type OnboardingActionResult = {
   error?: string;
@@ -54,33 +59,6 @@ type CompleteOnboardingInput = {
 function cleanOptionalString(value: string | null | undefined) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
-}
-
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-function getCriterionKey(label: string, builtinKey?: string | null) {
-  switch (builtinKey) {
-    case "parking":
-      return "parking";
-    case "storage":
-      return "storage";
-    case "gym":
-      return "gym";
-    case "inSuiteLaundry":
-      return "in_suite_laundry";
-    case "pets":
-      return "pets";
-    case "furnished":
-      return "furnished";
-    default:
-      return slugify(label);
-  }
 }
 
 function parseNeighborhoods(value?: string) {
@@ -188,16 +166,18 @@ export async function saveOnboardingPriorities(
     const label = cleanOptionalString(priority.label);
     if (!label) continue;
 
-    const key = getCriterionKey(label, priority.builtinKey);
+    const predefined = getPredefinedCriterion(label);
+    const normalizedLabel = predefined?.label ?? normalizeCriterionLabel(label);
+    const key = predefined?.key ?? getCriterionKey(normalizedLabel);
     const { data: criterion, error: criterionError } = await supabase
       .from("rental_search_criteria")
       .upsert(
         {
           rental_search_id: input.workspaceId,
           key,
-          label,
-          builtin_key: priority.builtinKey ?? null,
-          keywords: [label],
+          label: normalizedLabel,
+          builtin_key: predefined?.builtinKey ?? priority.builtinKey ?? null,
+          keywords: predefined?.keywords ?? [normalizedLabel],
           archived_at: null,
           created_by: user.id,
         },
@@ -332,6 +312,42 @@ export async function completeOnboarding(): Promise<never> {
   revalidatePath("/");
   revalidatePath("/onboarding");
   redirect("/");
+}
+
+export async function completeJoinWorkspaceOnboarding(
+  workspaceId: string,
+  places: Array<Omit<OnboardingPlaceInput, "workspaceId">> = []
+): Promise<never> {
+  const { supabase, user } = await getAuthenticatedSupabaseClient();
+
+  for (const place of places) {
+    const hasPlace = cleanOptionalString(place.name) && cleanOptionalString(place.address);
+    if (!hasPlace) continue;
+
+    const placeResult = await addOnboardingPlace({
+      workspaceId,
+      ...place,
+    });
+
+    if (placeResult.error) {
+      throw new Error(placeResult.error);
+    }
+  }
+
+  await supabase
+    .from("profiles")
+    .upsert(
+      {
+        id: user.id,
+        onboarding_completed: true,
+      },
+      { onConflict: "id" }
+    );
+
+  revalidatePath("/");
+  revalidatePath("/onboarding");
+  revalidatePath("/settings");
+  redirect(`/?workspace=${encodeURIComponent(workspaceId)}&joined=1`);
 }
 
 export async function completeOnboardingWithSetup(

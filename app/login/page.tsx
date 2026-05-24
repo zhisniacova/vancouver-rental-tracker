@@ -12,6 +12,10 @@ function getSafeRedirect(path?: string) {
   return path;
 }
 
+function isInviteRedirect(path?: string) {
+  return getSafeRedirect(path).startsWith("/join?");
+}
+
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const { auth: authMode, next } = await searchParams;
   const auth = await getAuthenticatedSupabaseClientOrNull();
@@ -23,7 +27,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       .eq("id", auth.user.id)
       .maybeSingle();
 
-    if (!profile?.onboarding_completed) {
+    if (!profile?.onboarding_completed && !isInviteRedirect(next)) {
       redirect("/onboarding");
     }
 

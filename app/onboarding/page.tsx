@@ -14,6 +14,10 @@ type RawSearchPreferences = {
   preferredNeighborhoods?: string[];
 };
 
+type OnboardingPageProps = {
+  searchParams: Promise<{ mode?: string; workspace?: string; joined?: string }>;
+};
+
 function mapImportance(value: ImportanceLevel | string | null | undefined) {
   if (value === "must-have") return "must-have";
   if (value === "important") return "high";
@@ -21,7 +25,11 @@ function mapImportance(value: ImportanceLevel | string | null | undefined) {
   return "low";
 }
 
-export default async function OnboardingPage() {
+export default async function OnboardingPage({ searchParams }: OnboardingPageProps) {
+  const query = await searchParams;
+  const mode =
+    query.mode === "join_workspace" ? "join_workspace" : "create_workspace";
+  const requestedWorkspaceId = query.workspace?.trim() || null;
   const { supabase, user } = await getAuthenticatedSupabaseClient();
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -37,16 +45,22 @@ export default async function OnboardingPage() {
     redirect("/");
   }
 
-  const { data: workspaces, error: workspaceError } = await supabase
+  const workspaceQuery = supabase
     .from("rental_searches")
-    .select("id, name, criteria_preferences, created_at")
-    .order("created_at", { ascending: true });
+    .select("id, name, criteria_preferences, created_at");
+
+  const { data: workspaces, error: workspaceError } = requestedWorkspaceId
+    ? await workspaceQuery.eq("id", requestedWorkspaceId).order("created_at", { ascending: true })
+    : await workspaceQuery.order("created_at", { ascending: true });
 
   if (workspaceError) {
     console.error("Error fetching onboarding workspace:", workspaceError);
   }
 
   const workspace = workspaces?.[0] ?? null;
+  const onboardingMode = mode === "join_workspace" && workspace
+    ? "join_workspace"
+    : "create_workspace";
   const rawPreferences =
     workspace?.criteria_preferences &&
     typeof workspace.criteria_preferences === "object"
@@ -109,6 +123,8 @@ export default async function OnboardingPage() {
 
   return (
     <OnboardingFlow
+      mode={onboardingMode}
+      joinedWorkspaceName={query.joined === "1" ? workspace?.name ?? null : null}
       initialWorkspace={
         workspace
           ? {

@@ -25,12 +25,14 @@ import {
 } from "lucide-react";
 import {
   completeOnboarding,
+  completeJoinWorkspaceOnboarding,
   completeOnboardingWithSetup,
   createOnboardingInviteLink,
   saveOnboardingPriorities,
   saveOnboardingSearchSetup,
 } from "@/app/onboarding/actions";
 import { type FrequentPlace } from "@/lib/commute";
+import { getPredefinedCriterion, normalizeCriterionLabel } from "@/lib/customCriteria";
 
 type OnboardingWorkspace = {
   id: string;
@@ -53,12 +55,14 @@ type OnboardingPlace = FrequentPlace & {
 };
 
 type Props = {
+  mode: "create_workspace" | "join_workspace";
+  joinedWorkspaceName?: string | null;
   initialWorkspace: OnboardingWorkspace | null;
   initialCriteria: OnboardingCriterion[];
   initialPlaces: FrequentPlace[];
 };
 
-const steps = [
+const createWorkspaceSteps = [
   "Welcome",
   "Search",
   "Priorities",
@@ -66,6 +70,8 @@ const steps = [
   "Collaboration",
   "Finish",
 ];
+
+const joinWorkspaceSteps = ["Welcome", "Preferences", "Places", "Finish"];
 
 const priorityOptions: Array<{
   label: string;
@@ -80,9 +86,12 @@ const priorityOptions: Array<{
     builtinKey: "inSuiteLaundry",
     helper: "Washer/dryer in the unit",
   },
-  { label: "Pets / pet policy", builtinKey: "pets", helper: "Pet-friendly terms" },
+  { label: "Pets allowed", builtinKey: "pets", helper: "Pet-friendly terms" },
   { label: "Furnished", builtinKey: "furnished", helper: "Move-in ready furniture" },
   { label: "Balcony", helper: "Private outdoor space" },
+  { label: "EV charging", helper: "Electric vehicle charging access" },
+  { label: "Dishwasher", helper: "In-unit dishwasher" },
+  { label: "Smoke-free", helper: "No smoking in the unit/building" },
   { label: "Sauna", helper: "Building amenity" },
 ];
 
@@ -116,7 +125,17 @@ function getInitialPriorities(criteria: OnboardingCriterion[]) {
   });
 }
 
-function StepProgress({ currentStep }: { currentStep: number }) {
+function StepProgress({
+  currentStep,
+  steps,
+  workspaceId,
+  mode,
+}: {
+  currentStep: number;
+  steps: string[];
+  workspaceId: string;
+  mode: Props["mode"];
+}) {
   return (
     <div className="sticky top-0 z-20 border-b border-slate-200/70 bg-slate-50/95 px-4 py-3 backdrop-blur sm:px-6">
       <div className="mx-auto max-w-6xl">
@@ -131,13 +150,20 @@ function StepProgress({ currentStep }: { currentStep: number }) {
           </div>
           <button
             type="button"
-            onClick={() => completeOnboarding()}
+            onClick={() =>
+              mode === "join_workspace" && workspaceId
+                ? completeJoinWorkspaceOnboarding(workspaceId)
+                : completeOnboarding()
+            }
             className="rounded-full px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-white hover:text-slate-900"
           >
             Skip onboarding
           </button>
         </div>
-        <div className="grid grid-cols-6 gap-2">
+        <div
+          className="grid gap-2"
+          style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
+        >
           {steps.map((step, index) => (
             <div key={step} className="h-2 rounded-full bg-slate-200">
               <div
@@ -236,12 +262,18 @@ function getPriorityIcon(label: string) {
       return <Dumbbell className={className} />;
     case "In-suite laundry":
       return <WashingMachine className={className} />;
-    case "Pets / pet policy":
+    case "Pets allowed":
       return <Home className={className} />;
     case "Furnished":
       return <Sofa className={className} />;
     case "Balcony":
       return <Trees className={className} />;
+    case "EV charging":
+      return <Car className={className} />;
+    case "Dishwasher":
+      return <WashingMachine className={className} />;
+    case "Smoke-free":
+      return <Home className={className} />;
     case "Sauna":
       return <Waves className={className} />;
     default:
@@ -268,6 +300,8 @@ function Field({
 }
 
 export default function OnboardingFlow({
+  mode,
+  joinedWorkspaceName,
   initialWorkspace,
   initialCriteria,
   initialPlaces,
@@ -303,12 +337,18 @@ export default function OnboardingFlow({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+  const steps = mode === "join_workspace" ? joinWorkspaceSteps : createWorkspaceSteps;
+  const stepKey =
+    mode === "join_workspace"
+      ? (["welcome", "priorities", "commute", "finish"] as const)[step]
+      : (["welcome", "search", "priorities", "commute", "collaboration", "finish"] as const)[step];
 
   const selectedPriorities = useMemo(
     () => priorities.filter((priority) => priority.selected),
     [priorities]
   );
-  const canContinue = step !== 1 || workspaceName.trim().length > 0;
+  const canContinue =
+    mode === "join_workspace" || step !== 1 || workspaceName.trim().length > 0;
 
   function updatePriority(
     label: string,
@@ -322,20 +362,27 @@ export default function OnboardingFlow({
   }
 
   function addCustomCriterion() {
-    const label = customCriterion.trim();
+    const predefined = getPredefinedCriterion(customCriterion);
+    const label = predefined?.label ?? normalizeCriterionLabel(customCriterion);
     if (!label) return;
-    if (
-      priorities.some(
-        (priority) => priority.label.toLowerCase() === label.toLowerCase()
-      )
-    ) {
+    const existingPriority = priorities.find(
+      (priority) => priority.label.toLowerCase() === label.toLowerCase()
+    );
+
+    if (existingPriority) {
+      updatePriority(existingPriority.label, { selected: true });
       setCustomCriterion("");
       return;
     }
 
     setPriorities((current) => [
       ...current,
-      { label, builtinKey: null, importance: "medium", selected: true },
+      {
+        label,
+        builtinKey: predefined?.builtinKey ?? null,
+        importance: "medium",
+        selected: true,
+      },
     ]);
     setCustomCriterion("");
   }
@@ -383,7 +430,7 @@ export default function OnboardingFlow({
         return;
       }
 
-      setStep(3);
+      setStep((current) => Math.min(steps.length - 1, current + 1));
     });
   }
 
@@ -430,48 +477,63 @@ export default function OnboardingFlow({
     });
   }
 
+  function getDraftPlaces() {
+    return [
+      ...places
+        .filter((place) => !savedPlaceIds.has(place.id))
+        .map((place) => ({
+          name: place.name,
+          address: place.address,
+          maxDriveMinutes: place.maxDriveMinutes
+            ? String(place.maxDriveMinutes)
+            : undefined,
+          maxTransitMinutes: place.maxTransitMinutes
+            ? String(place.maxTransitMinutes)
+            : undefined,
+        })),
+      ...(placeName.trim() && placeAddress.trim()
+        ? [
+            {
+              name: placeName,
+              address: placeAddress,
+              maxDriveMinutes: maxDriveMinutes || undefined,
+              maxTransitMinutes: maxTransitMinutes || undefined,
+            },
+          ]
+        : []),
+    ];
+  }
+
   function goNext() {
     if (step === 0) {
       setStep(1);
       return;
     }
 
-    if (step === 1) {
-      continueFromSearchSetup();
-      return;
-    }
-
-    if (step === 2) {
+    if (mode === "join_workspace" && stepKey === "priorities") {
       continueFromPriorities();
       return;
     }
 
-    if (step === 5) {
+    if (stepKey === "search") {
+      continueFromSearchSetup();
+      return;
+    }
+
+    if (stepKey === "priorities") {
+      continueFromPriorities();
+      return;
+    }
+
+    if (mode === "join_workspace" && stepKey === "finish") {
       startTransition(async () => {
-        const draftPlaces = [
-          ...places
-            .filter((place) => !savedPlaceIds.has(place.id))
-            .map((place) => ({
-              name: place.name,
-              address: place.address,
-              maxDriveMinutes: place.maxDriveMinutes
-                ? String(place.maxDriveMinutes)
-                : undefined,
-              maxTransitMinutes: place.maxTransitMinutes
-                ? String(place.maxTransitMinutes)
-                : undefined,
-            })),
-          ...(placeName.trim() && placeAddress.trim()
-            ? [
-                {
-                  name: placeName,
-                  address: placeAddress,
-                  maxDriveMinutes: maxDriveMinutes || undefined,
-                  maxTransitMinutes: maxTransitMinutes || undefined,
-                },
-              ]
-            : []),
-        ];
+        await completeJoinWorkspaceOnboarding(workspaceId, getDraftPlaces());
+      });
+      return;
+    }
+
+    if (stepKey === "finish") {
+      startTransition(async () => {
         const result = await completeOnboardingWithSetup({
           searchSetup: {
             workspaceId,
@@ -482,7 +544,7 @@ export default function OnboardingFlow({
             preferredNeighborhoods,
           },
           priorities: selectedPriorities,
-          places: draftPlaces,
+          places: getDraftPlaces(),
         });
 
         if (result?.error) {
@@ -498,7 +560,7 @@ export default function OnboardingFlow({
   }
 
   function renderStep() {
-    if (step === 0) {
+    if (stepKey === "welcome") {
       return (
         <div className="grid items-center gap-7 lg:grid-cols-[0.9fr_1.1fr]">
           <div>
@@ -507,11 +569,14 @@ export default function OnboardingFlow({
               Shared rental search
             </p>
             <h1 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-6xl">
-              Find your next home together
+              {mode === "join_workspace"
+                ? `You joined ${joinedWorkspaceName ?? workspaceName}`
+                : "Find your next home together"}
             </h1>
             <p className="mt-4 max-w-2xl text-lg leading-8 text-slate-600">
-              Track listings, compare apartments, coordinate viewings, and
-              message landlords in one shared workspace.
+              {mode === "join_workspace"
+                ? "You joined this shared search. Now add your personal preferences and places."
+                : "Track listings, compare apartments, coordinate viewings, and message landlords in one shared workspace."}
             </p>
           </div>
           <PreviewCard />
@@ -519,7 +584,7 @@ export default function OnboardingFlow({
       );
     }
 
-    if (step === 1) {
+    if (stepKey === "search") {
       return (
         <div className="mx-auto max-w-5xl">
           <div className="mb-5">
@@ -589,16 +654,20 @@ export default function OnboardingFlow({
       );
     }
 
-    if (step === 2) {
+    if (stepKey === "priorities") {
       return (
         <div className="mx-auto max-w-6xl">
           <div className="mb-5">
             <p className="text-sm font-bold text-slate-500">Priorities</p>
             <h1 className="mt-2 text-4xl font-bold tracking-tight text-slate-950">
-              Choose what matters most
+              {mode === "join_workspace"
+                ? "Set your personal priorities"
+                : "Choose what matters most"}
             </h1>
             <p className="mt-2 text-base text-slate-600">
-              Pick the signals you want listings scored against.
+              {mode === "join_workspace"
+                ? "These preferences are saved under your account inside the workspace you just joined."
+                : "Pick the signals you want listings scored against."}
             </p>
           </div>
 
@@ -729,7 +798,7 @@ export default function OnboardingFlow({
       );
     }
 
-    if (step === 3) {
+    if (stepKey === "commute") {
       return (
         <div className="mx-auto max-w-6xl">
           <div className="mb-5">
@@ -738,8 +807,8 @@ export default function OnboardingFlow({
               Add places you visit often
             </h1>
             <p className="mt-2 text-base text-slate-600">
-              Add places like UBC, work, or gym to estimate commute times for
-              each listing.
+              Add places like Work, UBC, Partner&apos;s work, or gym to estimate
+              commute times for each listing.
             </p>
           </div>
 
@@ -750,7 +819,7 @@ export default function OnboardingFlow({
                   <input
                     value={placeName}
                     onChange={(event) => setPlaceName(event.target.value)}
-                    placeholder="Work, UBC, Gym"
+                    placeholder="Work, UBC, Partner's work"
                     className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-950 outline-none focus:border-slate-500"
                   />
                 </Field>
@@ -808,8 +877,8 @@ export default function OnboardingFlow({
                 <div className="rounded-3xl bg-slate-50 p-6 text-center">
                   <MapPin className="mx-auto mb-3 h-8 w-8 text-slate-400" />
                   <p className="text-sm text-slate-500">
-                    Add places like UBC, work, or gym to estimate commute times
-                    for each listing.
+                    Add places like Work, UBC, or Partner&apos;s work to estimate
+                    commute times for each listing.
                   </p>
                 </div>
               ) : (
@@ -842,7 +911,7 @@ export default function OnboardingFlow({
       );
     }
 
-    if (step === 4) {
+    if (stepKey === "collaboration") {
       return (
         <div className="mx-auto max-w-6xl">
           <div className="mb-5">
@@ -921,11 +990,14 @@ export default function OnboardingFlow({
           <Building2 className="h-8 w-8" />
         </div>
         <h1 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">
-          Your search is ready
+          {mode === "join_workspace"
+            ? "Your workspace is ready"
+            : "Your search is ready"}
         </h1>
         <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-slate-600">
-          Head to the dashboard to add your first listing, compare matches, and
-          keep every message and viewing organized.
+          {mode === "join_workspace"
+            ? "Head to the dashboard to review shared listings with your preferences and commute places included."
+            : "Head to the dashboard to add your first listing, compare matches, and keep every message and viewing organized."}
         </p>
         <div className="mx-auto mt-8 grid max-w-2xl gap-3 sm:grid-cols-3">
           {[
@@ -945,7 +1017,12 @@ export default function OnboardingFlow({
 
   return (
     <main className="min-h-screen bg-slate-50 pb-24">
-      <StepProgress currentStep={step} />
+      <StepProgress
+        currentStep={step}
+        steps={steps}
+        workspaceId={workspaceId}
+        mode={mode}
+      />
       <section className="mx-auto max-w-6xl px-4 py-7 sm:px-6 sm:py-9">
         {renderStep()}
 
@@ -975,14 +1052,14 @@ export default function OnboardingFlow({
           </button>
 
           <div className="flex items-center gap-2">
-            {(step === 3 || step === 4) && (
+            {(stepKey === "commute" || stepKey === "collaboration") && (
               <button
                 type="button"
                 onClick={() => setStep((current) => current + 1)}
                 disabled={isPending}
                 className="rounded-2xl px-4 py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
               >
-                {step === 3 ? "Skip places" : "Invite later"}
+                {stepKey === "commute" ? "Skip places" : "Invite later"}
               </button>
             )}
             <button
@@ -994,8 +1071,10 @@ export default function OnboardingFlow({
               {isPending
                 ? "Saving..."
                 : step === 0
-                  ? "Start search"
-                  : step === 5
+                  ? mode === "join_workspace"
+                    ? "Set preferences"
+                    : "Start search"
+                  : stepKey === "finish"
                     ? "Go to dashboard"
                     : "Continue"}
               <ArrowRight className="h-4 w-4" />
