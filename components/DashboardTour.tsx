@@ -85,7 +85,7 @@ export default function DashboardTour({ hasSeenTutorial }: Props) {
   }
 
   return (
-    <aside className="fixed bottom-5 right-5 z-50 w-[min(420px,calc(100vw-2rem))] rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl shadow-slate-300/40">
+    <aside className="fixed left-5 top-5 z-50 w-[min(420px,calc(100vw-2rem))] rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl shadow-slate-300/40">
       <div className="mb-3 flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white">
