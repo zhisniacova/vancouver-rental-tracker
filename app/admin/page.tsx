@@ -7,7 +7,7 @@ import { getAuthenticatedSupabaseClient } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 function getAdminEmails() {
-  return (process.env.ADMIN_EMAILS ?? "zhisniacova@gmail.com")
+  return (process.env.ADMIN_EMAILS ?? "")
     .split(",")
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean);
