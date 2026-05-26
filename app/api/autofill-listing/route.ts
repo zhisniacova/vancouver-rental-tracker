@@ -1,4 +1,5 @@
 import { geocodeAddress, reverseGeocodeCoordinates } from "@/lib/geocoding";
+import { getAuthenticatedSupabaseClientOrNull } from "@/lib/auth";
 
 type AmenityValue = "Unknown" | "Yes" | "No";
 type ListingStatus =
@@ -1402,6 +1403,12 @@ function listingDataFromDescription(rawDescription: string): AutofillListingData
 
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthenticatedSupabaseClientOrNull();
+
+    if (!auth) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = (await request.json()) as AutofillListingRequest;
     const rawUrl = body.url?.trim();
     const descriptionOverride = body.descriptionOverride?.trim() || "";
